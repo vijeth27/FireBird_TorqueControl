@@ -16,7 +16,7 @@ origin = np.array([0,0])
 grid_Size = 5.0 #in meters
 grid_Res = 0.02 #in cm 
 
-N_Grid_Points = int(grid_Size/grid_Res)
+N_Grid_Points = int(grid_Size/grid_Res) #We gonna assume square grids. Else even the Voronoi partition function has to change.
 
 x_grid=np.arange(-grid_Size/2+origin[0], grid_Size/2+origin[0], grid_Res)+grid_Res/2 #+grid_Res/2 gives the centroid
 y_grid=np.arange(-grid_Size/2+origin[1], grid_Size/2+origin[1], grid_Res)+grid_Res/2
@@ -58,17 +58,51 @@ phi=a[0]*K[:,:,0]+a[1]*K[:,:,1]+a[2]*K[:,:,2]+a[3]*K[:,:,3]+a[4]*K[:,:,4]
 #print phi
 
 #Plotting the basis functions for visualisations.
-fig = plt.figure()
-ax=fig.add_subplot(111, projection='3d')
-ax.plot_surface(X_grid, Y_grid, phi,cmap='viridis',linewidth=0)
-plt.show()
+#fig = plt.figure()
+#ax=fig.add_subplot(111, projection='3d')
+#ax.plot_surface(X_grid, Y_grid, phi,cmap='viridis',linewidth=0)
+#plt.show()
 
 
 #The number of bots and their locations here will be fed to the system from the master computer later. 
 
 N_bots=4
-BotNumber=1 #This will be set correctly so that the bot know which location data is its own. 
+BotNumber=0  #This will be set correctly (0,1,2...N_bots) so that the bot know which location data is its own. 
 
 bot_loc=np.empty((2,N_bots));
 
+#Temporary shiz
+bot_loc[:,0]=(5*0.0,5*0.0);
+bot_loc[:,1]=(-5*0.25,5*0.25);
+bot_loc[:,2]=(5*0.25,-5*0.25);
+bot_loc[:,3]=(-5*0.25,-5*0.25);
+
+
+
 #Write the subrcriber here to take all the bot_loc data
+def cartesianDist(a,b):
+	return math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2)
+
+#print bot_loc
+
+#Writing the Voronoi partition calculator function.
+#This function returns the set of points on the pos_grid which lie within the bot's voronoi partition. 
+def voronoi(grid, Nbots, BotNo, locations):
+	VPartition=[]
+	N_Grid_Points = len(grid[:,0,0])
+	for i in range(N_Grid_Points):
+		for j in range(N_Grid_Points):	#This iterates over all points in the domain.
+			inPartition=True 			#This stays one as long as the point is closer to the botIn question than any other point. 
+			for N in range(Nbots):
+				if N!=BotNo and inPartition: 
+					inPartition = inPartition and cartesianDist(grid[i,j,:],locations[:,BotNo])<cartesianDist(grid[i,j,:],locations[:,N]) 		
+			if(inPartition):
+				VPartition.append(grid[i,j,:])
+	return VPartition
+A=voronoi(pos_grid,N_bots,BotNumber,bot_loc)
+
+x,y = np.array(A).T 
+
+plt.scatter(x,y)
+plt.scatter(bot_loc[0][:],bot_loc[1][:], color = 'r', marker = 'x')
+plt.show()
