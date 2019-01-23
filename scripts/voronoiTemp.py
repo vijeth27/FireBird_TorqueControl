@@ -103,6 +103,11 @@ A=voronoi(pos_grid,N_bots,BotNumber,bot_loc)
 
 x,y = np.array(A).T 
 
-plt.scatter(x,y)
-plt.scatter(bot_loc[0][:],bot_loc[1][:], color = 'r', marker = 'x')
-plt.show()
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+fig.show()
+
+ax.scatter(x,y)
+ax.scatter(bot_loc[0][:],bot_loc[1][:], color = 'r', marker = 'x')
+
