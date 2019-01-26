@@ -8,15 +8,16 @@ from fb5_torque_ctrl.msg import PwmInput
 from geometry_msgs.msg import TransformStamped
 import math
 
-#Defining as global variable for loging
+#Defining as global variable for logging
 codeStartTime=0
+N_bots=4
 bot_loc=np.empty((2,N_bots));
 BotNumber=0
 
 #The experimental data is added to the data.csv file
 headEnc=['time','interval','encR','encL','wR','wL','wdotR','wdotL','wddotR','wddotL']
 headPWM=['time','pwmR','pwmL']
-headVICON=['time','vijeth_0','vijeth_1','vijeth_2','vijeth_3']
+headVICON=['time','vijeth_0_x','vijeth_0_y','vijeth_1_x','vijeth_1_y','vijeth_2_x','vijeth_2_y','vijeth_3_x','vijeth_3_y']
 
 with open('dataEnc.csv','w') as myfile:
 	writer=csv.writer(myfile)
@@ -78,22 +79,21 @@ def callbackPWM(data):
             writer.writerow(row)
 	#print(rospy.get_time()-codeStartTime-logTime) #Just to see how long this logging takes
 
-def callbackVICON(data):
-	#global bot_loc
-	#global BotNumber
-	#global codeStartTime
-	#bot_index=arg
+def callbackVICON(data,arg):
+	global bot_loc
+	global BotNumber
+	global codeStartTime
+	bot_index=arg
 	#Temporary shiz
-	#bot_loc[:,bot_index]=(data.transform.translation.x,data.transform.translation.y);
-	#if arg==BotNumber:
-	#	rospy.loginfo("The bots are located at:", bot_loc)
-
-	#logTime=rospy.get_time()-codeStartTime
-    #row=[logTime,data.rightInput,data.leftInput]
-    #with open('dataPWM.csv','ab') as myfile:
-    #        writer=csv.writer(myfile)
-    #        writer.writerow(row)
-	#print(rospy.get_time()-codeStartTime-logTime) #Just to see how long this logging takes
+	bot_loc[:,bot_index]=(data.transform.translation.x,data.transform.translation.y);
+	
+	if arg==BotNumber:
+		logTime=rospy.get_time()-codeStartTime
+		row=[logTime,bot_loc[0,0],bot_loc[1,0],bot_loc[0,1],bot_loc[1,1],bot_loc[0,2],bot_loc[1,2],bot_loc[0,3],bot_loc[1,3]]
+		with open('dataPWM.csv','ab') as myfile:
+            writer=csv.writer(myfile)
+            writer.writerow(row)
+            #print(rospy.get_time()-codeStartTime-logTime) #Just to see how long this logging takes
 
 def loggingNode():
 	global codeStartTime
