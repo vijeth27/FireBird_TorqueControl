@@ -14,7 +14,7 @@ from mpl_toolkits.mplot3d import Axes3D
 origin = np.array([0,0])
 
 grid_Size = 5.0 #in meters
-grid_Res = 0.02 #in cm 
+grid_Res = 0.02 #in meters 
 
 N_Grid_Points = int(grid_Size/grid_Res) #We gonna assume square grids. Else even the Voronoi partition function has to change.
 
@@ -102,7 +102,6 @@ def voronoi(grid, Nbots, BotNo, locations):
 A=voronoi(pos_grid,N_bots,BotNumber,bot_loc)
 
 x,y = np.array(A).T 
-
 
 fig = plt.figure()
 ax = fig.add_subplot(111)
