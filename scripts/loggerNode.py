@@ -95,7 +95,7 @@ def callbackVICON(data,arg):
             writer.writerow(row)
             #print(rospy.get_time()-codeStartTime-logTime) #Just to see how long this logging takes
 
-def loggingNode():
+def loggerNode():
 	global codeStartTime
 	rospy.init_node('loggingNode',anonymous=True)
 	codeStartTime=rospy.get_time()
@@ -112,6 +112,6 @@ def loggingNode():
 	rospy.spin()
 if __name__ == '__main__':
     try:
-        torqueController()
+        loggerNode()
     except rospy.ROSInterruptException:
         pass
