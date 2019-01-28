@@ -21,7 +21,7 @@ from numpy.linalg import inv
 origin = np.array([0.0,0.0])
 
 grid_Size = 5.0 #in meters
-grid_Res = 0.02 #in meters. Each square is 2 cm width. 
+grid_Res = 0.02 #in meters. Each square is 2 cm width.
 
 N_Grid_Points = int(grid_Size/grid_Res) #We gonna assume square grids. Else even the Voronoi partition function has to change.
 
@@ -30,7 +30,7 @@ y_grid=np.arange(-grid_Size/2+origin[1], grid_Size/2+origin[1], grid_Res)+grid_R
 
 X_grid, Y_grid = np.meshgrid(x_grid,y_grid)
 
-#pos_grid is a three 250x250 matrix with each point holding the coordinate of the centroid of a given grid square. 
+#pos_grid is a three 250x250 matrix with each point holding the coordinate of the centroid of a given grid square.
 #eg. pos_grid[0,0,:] will give the 1st squares centroid as [-2.49,-2.49]
 pos_grid = np.empty(X_grid.shape + (2,))
 pos_grid[:, :, 0] = X_grid; pos_grid[:, :, 1] = Y_grid
@@ -52,12 +52,12 @@ rv3 = multivariate_normal(mu3, Sigma)
 K=np.dstack((rv0.pdf(pos_grid), rv1.pdf(pos_grid),rv2.pdf(pos_grid),rv3.pdf(pos_grid),np.ones(pos_grid[:,:,0].shape)))
 
 #Randomly choosen weights to each element in the basis function.
-a=np.array([1.0/2,1.0/4,1.0/3,1.0/9,1.0/5]) 	#np.array([1,1,1,1,1]). This is the actual environmental distribution of the phenomenon. 
+a=np.array([1.0/2,1.0/4,1.0/3,1.0/9,1.0/5]) 	#np.array([1,1,1,1,1]). This is the actual environmental distribution of the phenomenon.
 a_hat=np.array([1.0/3,1.0/3,1.0/4,1.0/8,1.0/6]) #Estimate of above.
 a_min=np.array([1.0/20,1.0/20,1.0/20,1.0/20,1.0/20]) #The a_min determines the lowest value the update parameter should take.
-phi=a[0]*K[:,:,0]+a[1]*K[:,:,1]+a[2]*K[:,:,2]+a[3]*K[:,:,3]+a[4]*K[:,:,4] #Environmental distribution. 
+phi=a[0]*K[:,:,0]+a[1]*K[:,:,1]+a[2]*K[:,:,2]+a[3]*K[:,:,3]+a[4]*K[:,:,4] #Environmental distribution.
 
-#The number of bots and their locations here will be fed to the system from the master computer later. 
+#The number of bots and their locations here will be fed to the system from the master computer later.
 N_bots=4
 myStatus=botStatus()
 
@@ -85,7 +85,7 @@ u = np.array([[0.0],[0.0]])
 tau = np.array([[0.0],[0.0]])
 
 #This boolean decideds whther we wish a new data to be taken when the VICON subscriber finds a new data-point.
-#Look at the callbackVICON function to better understand its function. 
+#Look at the callbackVICON function to better understand its function.
 wantData=True
 
 #Defining the bot properties the best we know
@@ -212,7 +212,7 @@ def callbackVICON(data, args):
 			q_prev[0][0]=q[0][0]
 			q_prev[1][0]=q[1][0]
 			q_prev[2][0]=q[2][0]
-		
+
 			q[0][0]=data.transform.translation.x
 			q[1][0]=data.transform.translation.y
 			eulerAng=quat2eul([data.transform.rotation.x, data.transform.rotation.y, data.transform.rotation.z, data.transform.rotation.w])
@@ -297,40 +297,40 @@ def torqueController():
 	rospy.init_node('torqueController',anonymous=True)
 	#pub_PWM=rospy.Publisher('pwmCmd',PwmInput,queue_size=10)
 
-	#####################Change for each bot########################### 
-	pub_myStatus=rospy.Publisher('botStatus_1',botStatus,queue_size=10)
+	#####################Change for each bot###########################
+	pub_myStatus=rospy.Publisher('botStatus1',botStatus,queue_size=10)
 	###################################################################
 
 	#VICON data subscriber. Change the name to the required name here.
-    rospy.Subscriber("/vicon/vijeth_0/vijeth_0", TransformStamped, callbackVICON,0)
-    rospy.Subscriber("/vicon/vijeth_1/vijeth_1", TransformStamped, callbackVICON,1)
-    rospy.Subscriber("/vicon/vijeth_2/vijeth_2", TransformStamped, callbackVICON,2)
-    rospy.Subscriber("/vicon/vijeth_3/vijeth_3", TransformStamped, callbackVICON,3)
-    
-	#####################Change for each bot######################### 
-    rospy.Subscriber("'botStatus_0'", botStatus, callbackBotStatus,0)
-    rospy.Subscriber("'botStatus_2'", botStatus, callbackBotStatus,2)
-    rospy.Subscriber("'botStatus_3'", botStatus, callbackBotStatus,3)
-    #################################################################
-    
-    #Time parameters and initialisation
+	rospy.Subscriber("/vicon/vijeth_0/vijeth_0", TransformStamped, callbackVICON,0)
+    	rospy.Subscriber("/vicon/vijeth_1/vijeth_1", TransformStamped, callbackVICON,1)
+    	rospy.Subscriber("/vicon/vijeth_2/vijeth_2", TransformStamped, callbackVICON,2)
+    	rospy.Subscriber("/vicon/vijeth_3/vijeth_3", TransformStamped, callbackVICON,3)
+
+	#####################Change for each bot#########################
+    	rospy.Subscriber("'botStatus0'", botStatus, callbackBotStatus,0)
+    	rospy.Subscriber("'botStatus2'", botStatus, callbackBotStatus,2)
+    	rospy.Subscriber("'botStatus3'", botStatus, callbackBotStatus,3)
+    	#################################################################
+
+    	#Time parameters and initialisation
 	dt=0.01
 	timeLoopPrev=rospy.get_time()
 
 	timeForMotion=0.5 #We will allow the bot to move for half a second after it has computed the voronoi paritions.
 	myStatus.isMoving=False
 	rate = rospy.Rate(10)
-    while not rospy.is_shutdown(): 
-    	#With the following step and with the callbacks we ensure that the bot knows the status of each ot in real time.  
-    	botStatuses[BotNumber]=myStatus.isMoving
+    	while not rospy.is_shutdown():
+    		#With the following step and with the callbacks we ensure that the bot knows the status of each ot in real time.  
+    		botStatuses[BotNumber]=myStatus.isMoving
 
-    	#Now we will check whether or not we can compute the Voronoi parition. It can be done if non of the bots are moving.
-    	#Below statement means that all bots are stationary if 'any of the bots moving' is false.
-    	allBotsStationary= not(botStatuses[0] or botStatuses[1] or botStatuses[2] or botStatuses[3]) 
-    	
-      	if allBotsStationary:
-    		#Computing the Voronoi partition for this bot.
-    		partition=voronoi(pos_grid,N_bots,BotNumber,bot_loc)
+    		#Now we will check whether or not we can compute the Voronoi parition. It can be done if non of the bots are moving.
+    		#Below statement means that all bots are stationary if 'any of the bots moving' is false.
+    		allBotsStationary= not(botStatuses[0] or botStatuses[1] or botStatuses[2] or botStatuses[3])
+
+      		if allBotsStationary:
+    			#Computing the Voronoi partition for this bot.
+    			partition=voronoi(pos_grid,N_bots,BotNumber,bot_loc)
 
    			#Computing the mean and weighted mean over this bot's partition.
    			mv=Mv(partition,K,a_hat,grid_Res)
@@ -347,30 +347,30 @@ def torqueController():
    			timeStartMotion=rospy.get_time()
 
    		#Once the Voronoi partitions are computed the bot will be given a green signal to start moving ahead.
-   		#It will continue to move for the next timeForMotion duration. 
+   		#It will continue to move for the next timeForMotion duration.
    		if (rospy.get_time()-timeStartMotion)<timeForMotion:
-   			#Setting the motion for this period. 
+   			#Setting the motion for this period.
    			pwmInput.rightInput=120
-        	pwmInput.leftInput=120
-        	pub_PWM.publish(pwmInput)
-        	
+        		pwmInput.leftInput=120
+        		pub_PWM.publish(pwmInput)
+
         	#Updating the isMoving status to true
-        	myStatus.isMoving=True
-        	pub_myStatus.publish(myStatus)
+	        	myStatus.isMoving=True
+        		pub_myStatus.publish(myStatus)
 
 
-        #After timeForMotion all bots will stop because of the case below. Subsequently they will re-enter into Voronoi partition computation. 
+        	#After timeForMotion all bots will stop because of the case below. Subsequently they will re-enter into Voronoi partition computation. 
    		elif (rospy.get_time()-timeStartMotion)>timeForMotion:
-   			#Setting the motion for this period. 
+   			#Setting the motion for this period.
    			pwmInput.rightInput=0
-        	pwmInput.leftInput=0
-        	pub_PWM.publish(pwmInput)
-        	
-        	#Updating the isMoving status to true
-        	myStatus.isMoving=False
-        	pub_myStatus.publish(myStatus)
+        		pwmInput.leftInput=0
+        		pub_PWM.publish(pwmInput)
 
-       	#Setting the can
+       		 	#Updating the isMoving status to true
+        		myStatus.isMoving=False
+        		pub_myStatus.publish(myStatus)
+
+       		#Setting the can
 
 		#dt=rospy.get_time()-timeLoopEnd
 		#q_dot = (q-q_prev)/dt
@@ -396,7 +396,7 @@ def torqueController():
 	    	#pub_PWM.publish(pwmInput)
 		#q_prev=q
 		#timeLoopEnd=rospy.get_time()
-		
+
 		rate.sleep()
 
 if __name__ == '__main__':
