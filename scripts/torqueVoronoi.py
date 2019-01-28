@@ -56,8 +56,12 @@ phi=a[0]*K[:,:,0]+a[1]*K[:,:,1]+a[2]*K[:,:,2]+a[3]*K[:,:,3]+a[4]*K[:,:,4]
 
 #The number of bots and their locations here will be fed to the system from the master computer later. 
 N_bots=4
-BotNumber=0  #This will be set correctly (0,1,2...N_bots) so that the bot know which location data is its own. 
 
+##############################################################################################################
+#####################################Change for each bot######################################################
+##############################################################################################################
+BotNumber=1  #This will be set correctly (0,1,2...N_bots) so that the bot know which location data is its own.
+##############################################################################################################
 bot_loc=np.empty((2,N_bots));
 
 #Defining as global variable for loging
@@ -78,6 +82,27 @@ d=0.065 #distance from CG to axis
 R=0.085	#Semi-Distance between wheels
 r=0.025 #Radius of wheels
 
+
+#Since tf package can't be directly installed on RasPi the function below has be written.
+#Note that this function cannot handle singularities. It gives ZYX rotation Euler angles in radian.
+def quat2eul(qu):
+	global phi
+	global theta
+	global psi
+	#Computing Phi
+	phi = math.atan2(2*(qu[0]*qu[1]+qu[2]*qu[3]),1-2*(qu[1]**2+qu[2]**2))
+
+	#Computing Theta
+	#Introducing a check to avoid numerical errors
+	sinTheta=2*(qu[0]*qu[2]-qu[1]*qu[3])
+	if sinTheta>=1:
+		theta=math.pi/2
+	else:
+		theta=math.asin(sinTheta)
+
+	#Computing Psi
+	psi=math.atan2(2*(qu[0]*qu[3]+qu[2]*qu[1]),1-2*(qu[2]**2+qu[3]**2))
+	return np.array([[phi],[theta],[psi]])
 
 #Defining the nonlinear system properties.
 def S(q):
@@ -135,7 +160,7 @@ def rot2body(q):
 	rotmat=np.matrix([[math.cos(q[2]), math.sin(q[2]), 0],[-math.sin(q[2]), math.cos(q[2]), 0],[0, 0, 1]])
 	return rotmat
 
-#The subrcriber here to take all the bot_loc data and the bots orientation. 
+#The subrcriber here to take all the bot_loc data and the bots orientation.
 def callbackVICON(data, args):
 	global q
 	global BotNumber
@@ -148,22 +173,22 @@ def callbackVICON(data, args):
 		q[2][0]=eulerAng[0]
 	bot_loc[:,args]=np.array([data.transform.translation.x,data.transform.translation.y])
 
-#Simple Euler distance 
+#Simple Euler distance
 def cartesianDist(a,b):
 	return math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2)
 
 #Writing the Voronoi partition calculator function.
-#This function returns the set of points on the pos_grid which lie within the bot's voronoi partition. 
-#Note: We will only store the indices (i,j) of the points on the mesh grid as these are easioer to work with instead of the point coordinates themselves. 
+#This function returns the set of points on the pos_grid which lie within the bot's voronoi partition.
+#Note: We will only store the indices (i,j) of the points on the mesh grid as these are easioer to work with instead of the point coordinates themselves.
 def voronoi(grid, Nbots, BotNo, locations):
 	VPartition=[]
 	N_Grid_Points = len(grid[:,0,0])
 	for i in range(N_Grid_Points):
 		for j in range(N_Grid_Points):	#This iterates over all points in the domain.
-			inPartition=True 			#This stays one as long as the point is closer to the botIn question than any other point. 
+			inPartition=True 			#This stays one as long as the point is closer to the botIn question than any other point.
 			for N in range(Nbots):
 				if N!=BotNo and inPartition:
-					inPartition = inPartition and cartesianDist(grid[i,j,:],locations[:,BotNo])<cartesianDist(grid[i,j,:],locations[:,N]) 		
+					inPartition = inPartition and cartesianDist(grid[i,j,:],locations[:,BotNo])<cartesianDist(grid[i,j,:],locations[:,N])
 			if(inPartition):
 				VPartition.append(np.array([i,j]))
 	return VPartition
@@ -219,32 +244,32 @@ def torqueController():
 	#pub_PWM=rospy.Publisher('pwmCmd',PwmInput,queue_size=10)
 
 	#VICON data subscriber. Change the name to the required name here.
-    rospy.Subscriber("/vicon/vijeth_0/vijeth_0", TransformStamped, callbackVICON,0)
-    rospy.Subscriber("/vicon/vijeth_1/vijeth_1", TransformStamped, callbackVICON,1)
-    rospy.Subscriber("/vicon/vijeth_2/vijeth_2", TransformStamped, callbackVICON,2)
-    rospy.Subscriber("/vicon/vijeth_3/vijeth_3", TransformStamped, callbackVICON,3)
+        rospy.Subscriber("/vicon/vijeth_0/vijeth_0", TransformStamped, callbackVICON,0)
+        rospy.Subscriber("/vicon/vijeth_1/vijeth_1", TransformStamped, callbackVICON,1)
+        rospy.Subscriber("/vicon/vijeth_2/vijeth_2", TransformStamped, callbackVICON,2)
+        rospy.Subscriber("/vicon/vijeth_3/vijeth_3", TransformStamped, callbackVICON,3)
 
-    #The torque controller outputs commands at only 10Hz.
+        #The torque controller outputs commands at only 10Hz.
 	#The encoder data is still at 25 Hz as determined by the publisher in the other file
 	#timeLoopEnd=rospy.get_time()
 	#print "This is outside the loop"
 
 	rate = rospy.Rate(10)
-    while not rospy.is_shutdown():
-    	#Computing the Voronoi partition for this bot.
-    	partition=voronoi(pos_grid,N_bots,BotNumber,bot_loc)
+        while not rospy.is_shutdown():
+    		#Computing the Voronoi partition for this bot.
+    		partition=voronoi(pos_grid,N_bots,BotNumber,bot_loc)
 
-    	#Computing the mean and weighted mean over this bot's partition. 
-    	mv=Mv(partition,K,a_hat,grid_Res)						
-    	lv=Lv(partition,pos_grid,K,a_hat,grid_Res)
+    		#Computing the mean and weighted mean over this bot's partition.
+    		mv=Mv(partition,K,a_hat,grid_Res)
+    		lv=Lv(partition,pos_grid,K,a_hat,grid_Res)
 
-    	#Computing the weighted centroid.
-    	Cv=Lv/Mv
-    	print "Centroid for bot 0", Cv
-    	print "Locations for bot 0", bot_loc[:,0]
-    	print "Locations for bot 1", bot_loc[:,1]
-    	print "Locations for bot 2", bot_loc[:,2]
-    	print "Locations for bot 3", bot_loc[:,3]
+    		#Computing the weighted centroid.
+    		Cv=lv/mv
+    		print "Centroid for bot 0", Cv
+    		print "Locations for bot 0", bot_loc[:,0]
+    		print "Locations for bot 1", bot_loc[:,1]
+    		print "Locations for bot 2", bot_loc[:,2]
+    		print "Locations for bot 3", bot_loc[:,3]
 
 		#dt=rospy.get_time()-timeLoopEnd
 		#q_dot = (q-q_prev)/dt
@@ -265,9 +290,9 @@ def torqueController():
 		#tau=np.array(torque(q,q_dot,vel,u))
 
 		#Cponverting the torques to PWM inputs.
-        #pwmInput.rightInput=K_tau_R*tau[0][0]+K_wdot*wdotR+K_w*wR
-        #pwmInput.leftInput=K_tau_L*tau[1][0]+K_wdot*wdotR+K_w*wL
-	    #pub_PWM.publish(pwmInput)
+        	#pwmInput.rightInput=K_tau_R*tau[0][0]+K_wdot*wdotR+K_w*wR
+        	#pwmInput.leftInput=K_tau_L*tau[1][0]+K_wdot*wdotR+K_w*wL
+	    	#pub_PWM.publish(pwmInput)
 		#q_prev=q
 		#timeLoopEnd=rospy.get_time()
 		rate.sleep()

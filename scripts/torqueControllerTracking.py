@@ -264,7 +264,7 @@ def torqueController():
 	pub_PWM=rospy.Publisher('pwmCmd',PwmInput,queue_size=10)
 
 	#VICON data subscriber. Change the name to the required name here.
-    	rospy.Subscriber("/vicon/vijeth_0/vijeth_0", TransformStamped, callbackVICON)
+    	rospy.Subscriber("/vicon/vijeth_1/vijeth_1", TransformStamped, callbackVICON)
 
     	#The torque controller outputs commands at only 10Hz.
 	#The encoder data is still at 25 Hz as determined by the publisher in the other file
