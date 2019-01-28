@@ -52,6 +52,7 @@ find_package(catkin REQUIRED COMPONENTS
    FILES
    encoderData.msg
    PwmInput.msg
+   botStatus.msg
  )
 
 ## Generate services in the 'srv' folder
