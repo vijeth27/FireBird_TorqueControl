@@ -8,11 +8,12 @@ from fb5_torque_ctrl.msg import encoderData
 from fb5_torque_ctrl.msg import PwmInput
 import math
 from geometry_msgs.msg import TransformStamped
+from numpy.linalg import inv
 
 #Defining as global variable for loging
 q=np.array([[0.0],[0.0],[0.0]])
 qr=np.array([[0.0],[0.0],[0.0]])
-q_prev=q
+q_prev=np.array([[0.0],[0.0],[0.0]])
 
 #Defining the initial velocity in cotinuatuion of defining the initial state of the bot.
 vel = np.array([[0.0],[0.0]])
@@ -21,7 +22,7 @@ vel = np.array([[0.0],[0.0]])
 u = np.array([[0.0],[0.0]])
 tau = np.array([[0.0],[0.0]])
 
-
+wantData=True
 #Encoder Variables
 wR=0
 wL=0
@@ -53,10 +54,10 @@ R=0.085	#Semi-Distance between wheels
 r=0.025 #Radius of wheels
 
 #Controller gains
-k1=11.0	#k1=12 Best Result so far
-k2=11.0	#k2=12 Best Result so far
+k1=11	#k1=12 Best Result so far
+k2=11	#k2=12 Best Result so far
 k3=2.25	#k3=2.25  Best Result so far
-k4=0.3
+k4=0.0
 ki=0.1 #Seemed like a logical gain choice
 #Torque to PWM
 #We will neglect the w_ddot term as well as the tau_dot terms. The former is difficult to obtain with our current encoder.
@@ -115,8 +116,8 @@ F_bar = np.matrix([[0.002],[0.002]])
 
 #Create reference trajectory. This code only accomadates constant vr and wr. The one below makkes it go in a circle.
 def traj_req(t,dt,qr_prev):
-	vr=0.1		#in m/s
-	wr=0.1		#in rad/s
+	vr=0.2		#in m/s
+	wr=0.2		#in rad/s
 	xr_dot=vr*math.cos(qr_prev[2])
 	yr_dot=vr*math.sin(qr_prev[2])
 	thetar=qr_prev[2]+wr*dt
@@ -229,11 +230,23 @@ def callback(data):
 
 def callbackVICON(data):
 	global q
-	q[0][0]=data.transform.translation.x
-	q[1][0]=data.transform.translation.y
-	eulerAng=quat2eul([data.transform.rotation.x, data.transform.rotation.y, data.transform.rotation.z, data.transform.rotation.w])
-	#The order of rotation so happens that phi is actually psi. Hence eulerAng[0] is used.
-	q[2][0]=eulerAng[0]
+	global wantData
+	global q_prev
+	#This boolean wantData is here to restrict q from changing when we don't want it to i.e. inside our loop.
+	#Also any value assigned equal to the global variable q once in the torqueController loop keeps changing it's value. I kid you not, I struggled for an entire day trying to understand it.
+	#Even if it's assigned at the bottom of the loop it used to change when q was updated after q_prev assignment. (Again, not kidding.)
+	#So we will treat it like a global variable and deal with it in the callback itself.
+	if wantData:
+		q_prev[0][0]=q[0][0]
+		q_prev[1][0]=q[1][0]
+		q_prev[2][0]=q[2][0]
+
+		q[0][0]=data.transform.translation.x
+		q[1][0]=data.transform.translation.y
+		eulerAng=quat2eul([data.transform.rotation.x, data.transform.rotation.y, data.transform.rotation.z, data.transform.rotation.w])
+		#The order of rotation so happens that phi is actually psi. Hence eulerAng[0] is used.
+		q[2][0]=eulerAng[0]
+		wantData=False
 
 #Defining error vectors. All propagation will happen with this.
 e = np.array(rot2body(q)*np.matrix(qr-q))
@@ -259,6 +272,8 @@ def torqueController():
 	global wL
 	global wdotR
 	global wdotL
+	global wantData
+
 	rospy.init_node('torqueController',anonymous=True)
     	rospy.Subscriber('encoderData', encoderData, callback)
 	pub_PWM=rospy.Publisher('pwmCmd',PwmInput,queue_size=10)
@@ -278,18 +293,34 @@ def torqueController():
 	#Initializing
 	#Time parameters and initialisation
 	dt=0.01
-	timeLoopEnd=rospy.get_time()
-	print "This is outside the loop"
+	timeLoopPrev=rospy.get_time()
 
 	rate = rospy.Rate(10)
     	while not rospy.is_shutdown():
-		dt=rospy.get_time()-timeLoopEnd
+		#q varies like a wild bitch and q_prev was varying too (cos mah lyf is a sux) so we lock that shit.
+		#This want data decides whether or not the callback function should take in data. I'm damn smart if this works.
+		wantData=False #This redundant I know. But I iz veri scared so its here for safety. Callback is a monster.
+		dt=rospy.get_time()-timeLoopPrev
+		timeLoopPrev=rospy.get_time()
 		q_dot = (q-q_prev)/dt
 
+		print "q:", q
+		print "q_prev", q_prev
+		print "dt:", dt
+		print "q_dot:", q_dot
+
 		#Velocity of states
-		vel = np.array((S(q).transpose()*S(q)).I*S(q).transpose()*np.matrix(q_dot))
-		#print "vel:", vel
-		#print "q_dot:", q_dot
+		vel = 0*np.array((S(q).transpose()*S(q)).I*S(q).transpose()*np.matrix(q_dot))
+		print "vel:", vel
+		wVICON=np.array(inv(B_bar(q))*np.matrix(vel))
+		wdotVICON=(wVICON-wVICON)/dt
+		wRVicon=wVICON[0][0]
+		wLVicon=wVICON[1][0]
+		wdotRVicon=wdotVICON[0][0]
+		wdotLVicon=wdotVICON[1][0]
+		print "wRVicon", wRVicon, "wR",wR
+		print "wLVicon", wLVicon, "wL", wL
+		print "wdotRVicon",wdotRVicon, "wdotR", wdotR
 		#Generating the reference trajectory
 		ref = traj_req(rospy.get_time()-codeStartTime,dt,qr_prev)
 		qr=ref[:3]
@@ -299,8 +330,9 @@ def torqueController():
 
 		#Error in states
 		e=np.array(rot2body(q)*np.matrix(qr-q))
-		err_int=e*dt+err_int
-		print "e_int", err_int
+		err_int=e*dt*0+err_int*0
+		#print "e_int", err_int
+
 		#Controller
 		u=np.array(vc_dot(e+ki*err_int,vel,vel_ref,w_ref)) + k4*(vc(e+ki*err_int,vel_ref,w_ref)-vel)
 
@@ -308,11 +340,18 @@ def torqueController():
 		tau=np.array(torque(q,q_dot,vel,u))
 
 		#Cponverting the torques to PWM inputs.
-                pwmInput.rightInput=K_tau_R*tau[0][0]+K_wdot*wdotR+K_w*wR
-                pwmInput.leftInput=K_tau_L*tau[1][0]+K_wdot*wdotR+K_w*wL
-	        pub_PWM.publish(pwmInput)
-		q_prev=q
-		timeLoopEnd=rospy.get_time()
+		#Wheel velocities from VICON
+                pwmInput.rightInput=K_tau_R*tau[0][0]+K_wdot*wdotRVicon+K_w*wRVicon
+                pwmInput.leftInput=K_tau_L*tau[1][0]+K_wdot*wdotRVicon+K_w*wLVicon
+
+		#Wheel velocities from encoder
+		#pwmInput.rightInput=K_tau_R*tau[0][0]+K_wdot*wdotR+K_w*wR
+                #pwmInput.leftInput=K_tau_L*tau[1][0]+K_wdot*wdotR+K_w*w
+
+		wVICONPrev=wVICON
+
+                pub_PWM.publish(pwmInput)
+                wantData=True
 		rate.sleep()
 
 if __name__ == '__main__':
