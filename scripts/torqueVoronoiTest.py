@@ -65,7 +65,7 @@ botStatuses=np.array([False,False,False,False])
 ##############################################################################################################
 #####################################Change for each bot######################################################
 ##############################################################################################################
-BotNumber=0  #This will be set correctly (0,1,2...N_bots) so that the bot know which location data is its own.
+BotNumber=1  #This will be set correctly (0,1,2...N_bots) so that the bot know which location data is its own.
 ##############################################################################################################
 bot_loc=np.empty((2,N_bots));
 
@@ -295,11 +295,11 @@ def torqueController():
 
 	rospy.init_node('torqueController',anonymous=True)
 	###################Change for each bot##################
-	pub_PWM=rospy.Publisher('pwmCmd0',PwmInput,queue_size=10)
+	pub_PWM=rospy.Publisher('pwmCmd1',PwmInput,queue_size=10)
 	########################################################
 
 	#####################Change for each bot###########################
-	pub_myStatus=rospy.Publisher('botStatus0',botStatus,queue_size=10)
+	pub_myStatus=rospy.Publisher('botStatus1',botStatus,queue_size=10)
 	###################################################################
 
 	#VICON data subscriber. Change the name to the required name here.
@@ -309,7 +309,7 @@ def torqueController():
     	rospy.Subscriber("/vicon/vijeth_3/vijeth_3", TransformStamped, callbackVICON,3)
 
 	#####################Change for each bot#########################
-    	rospy.Subscriber('botStatus1', botStatus, callbackBotStatus,1)
+    	rospy.Subscriber('botStatus0', botStatus, callbackBotStatus,0)
     	rospy.Subscriber('botStatus2', botStatus, callbackBotStatus,2)
     	rospy.Subscriber('botStatus3', botStatus, callbackBotStatus,3)
     	#################################################################

@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python
 import rospy
 import csv
@@ -52,9 +53,9 @@ rv3 = multivariate_normal(mu3, Sigma)
 K=np.dstack((rv0.pdf(pos_grid), rv1.pdf(pos_grid),rv2.pdf(pos_grid),rv3.pdf(pos_grid),np.ones(pos_grid[:,:,0].shape)))
 
 #Randomly choosen weights to each element in the basis function.
-a=np.array([1.0/2,1.0/4,1.0/3,1.0/9,1.0/5]) 	#np.array([1,1,1,1,1]). This is the actual environmental distribution of the phenomenon.
-a_hat=np.array([1.0/3,1.0/3,1.0/5,1.0/11,1.0/6]) #Estimate of above.
-a_min=np.array([1.0/20,1.0/20,1.0/20,1.0/20,1.0/20]) #The a_min determines the lowest value the update parameter should take.
+a=np.array([2.0/1,2.0/1,1.0/100,1.0/100,1.0/100]) 	#np.array([1,1,1,1,1]). This is the actual environmental distribution of the phenomenon.
+a_hat=np.array([2.0/1,2.0/1,1.0/100,1.0/100,1.0/100]) #Estimate of above.
+a_min=np.array([1.0/100,1.0/100,1.0/100,1.0/100,1.0/100]) #The a_min determines the lowest value the update parameter should take.
 phi=a[0]*K[:,:,0]+a[1]*K[:,:,1]+a[2]*K[:,:,2]+a[3]*K[:,:,3]+a[4]*K[:,:,4] #Environmental distribution.
 
 #The number of bots and their locations here will be fed to the system from the master computer later.
@@ -65,7 +66,7 @@ botStatuses=np.array([False,False,False,False])
 ##############################################################################################################
 #####################################Change for each bot######################################################
 ##############################################################################################################
-BotNumber=0  #This will be set correctly (0,1,2...N_bots) so that the bot know which location data is its own.
+BotNumber=1  #This will be set correctly (0,1,2...N_bots) so that the bot know which location data is its own.
 ##############################################################################################################
 bot_loc=np.empty((2,N_bots));
 
@@ -113,10 +114,10 @@ K_tau_R=18000
 K_tau_L=18000
 
 #Controller requisite gains.
-alpha=1
+alpha=0.1
 Gamma=0.1
-gamma=1
-k1=10
+gamma=10
+k1=25
 k2=0.0
 
 pwmInput=PwmInput()
@@ -125,7 +126,7 @@ codeStartTime=0
 #The experimental data is added to the data.csv file
 head=['time','interval','wR','wL','wdotR','wdotL','pwmR','pwmL','theta','vel_v','vel_w','tau_R','tau_L','x','y','centroidX','centroidY','a_hat0','a_hat1','a_hat2','a_hat3','a_hat4']
 #########Change for bot#################
-with open('data0.csv','w') as myfile:
+with open('data1.csv','w') as myfile:
 ########################################
         writer=csv.writer(myfile)
         writer.writerow(head)
@@ -236,56 +237,77 @@ def callbackVICON(data, args):
 	#Even if it's assigned at the bottom of the loop it used to change when q was updated after q_prev assignment. (Again, not kidding.)
 	#So we will treat it like a global variable and deal with it in the callback itself.
 	#Also the wantData is only for the q of the current bot and not for the others so we will the bot_loc update outside.
-	if args==BotNumber:
-		#While q is used by the bot to compute voronoi partitions and control law we want higher accuracy to compute velocity. Thus we will use the VICON data more effectively
-		#for velocity by computing it here at a higher frequency in the call back.
-		q_current[0][0]=data.transform.translation.x
-                q_current[1][0]=data.transform.translation.y
-                eulerAng=quat2eul([data.transform.rotation.x, data.transform.rotation.y, data.transform.rotation.z, data.transform.rotation.w])
+        ######################################################################
+        #########Comment and uncomment the next section for velocity##########
+        ######################################################################
+        if wantData:
+                if args==BotNumber:
+                        q_prev[0][0]=q[0][0]
+                        q_prev[1][0]=q[1][0]
+                        q_prev[2][0]=q[2][0]
+
+                        q[0][0]=data.transform.translation.x
+                        q[1][0]=data.transform.translation.y
+                        eulerAng=quat2eul([data.transform.rotation.x, data.transform.rotation.y, data.transform.rotation.z, data.transform.rotation.w])
+                        #The order of rotation so happens that phi is actually psi. Hence eulerAng[0] is used.
+                        q[2][0]=eulerAng[0]
+                bot_loc[:,args]=np.array([data.transform.translation.x,data.transform.translation.y])
+                #wantData=False
+
+        ##########################################################################
+        #####################Uncomment for velocity computation###################
+        ##########################################################################
+#       if args==BotNumber:
+                #While q is used by the bot to compute voronoi partitions and control law we want higher accuracy to compute velocity. Thus we will use the VICON data more effectively
+                #for velocity by computing it here at a higher frequency in the call back.
+#               q_current[0][0]=data.transform.translation.x
+#                q_current[1][0]=data.transform.translation.y
+#                eulerAng=quat2eul([data.transform.rotation.x, data.transform.rotation.y, data.transform.rotation.z, data.transform.rotation.w])
                 #The order of rotation so happens that phi is actually psi. Hence eulerAng[0] is used.
-                q_current[2][0]=eulerAng[0]
+#                q_current[2][0]=eulerAng[0]
 
-		#print "q_prev", q_prev
-		#print "q_current", q_current
+                #print "q_prev", q_prev
+                #print "q_current", q_current
 
-		#Time between two callbacks
-		delT=rospy.get_time()-previousCallbackTime
-		previousCallbackTime=rospy.get_time()
-		#print "delT", delT
+                #Time between two callbacks
+#               delT=rospy.get_time()-previousCallbackTime
+#               previousCallbackTime=rospy.get_time()
+                #print "delT", delT
 
                 #Computing the velocity.
-                q_dot = (q_current-q_prev)/delT #Have to be careful as when the bot is stopped it will set q_prev = q as that script is continously running. But that is what we want. So even thou dt is very large once stopped the fi$
+#                q_dot = (q_current-q_prev)/delT #Have to be careful as when the bot is stopped it will set q_prev = q as that script is continously running. But that is what we want. So even thou dt is very large once stopped the$
 
-		q_prev[0][0]=data.transform.translation.x
-                q_prev[1][0]=data.transform.translation.y
-                eulerAng=quat2eul([data.transform.rotation.x, data.transform.rotation.y, data.transform.rotation.z, data.transform.rotation.w])
+#               q_prev[0][0]=data.transform.translation.x
+#                q_prev[1][0]=data.transform.translation.y
+#                eulerAng=quat2eul([data.transform.rotation.x, data.transform.rotation.y, data.transform.rotation.z, data.transform.rotation.w])
                 #The order of rotation so happens that phi is actually psi. Hence eulerAng[0] is used.
-                q_prev[2][0]=eulerAng[0]
+#                q_prev[2][0]=eulerAng[0]
 
                 #Velocity of states
-                vel = np.array((S(q_current).transpose()*S(q_current)).I*S(q_current).transpose()*np.matrix(q_dot))
+#                vel = np.array((S(q_current).transpose()*S(q_current)).I*S(q_current).transpose()*np.matrix(q_dot))
                 #print "vel:", vel
 
                 #Computing wheel RPMS
-                w=np.array(inv(B_bar(q_current))*np.matrix(vel))
-                wdot=(w-w_prev)/delT
-                w_prev=w
+#                w=np.array(inv(B_bar(q_current))*np.matrix(vel))
+#                wdot=(w-w_prev)/delT
+#                w_prev=w
                 #print "Wheel w:", w
 
-		wR=w[0][0]
-                wL=w[1][0]
-                wdotR=wdot[0][0]
-                wdotL=wdot[1][0]
+#               wR=w[0][0]
+#                wL=w[1][0]
+#                wdotR=wdot[0][0]
+#                wdotL=wdot[1][0]
                 #print "wdot", wdot
 
-		if wantData:
-			q[0][0]=data.transform.translation.x
-			q[1][0]=data.transform.translation.y
-			eulerAng=quat2eul([data.transform.rotation.x, data.transform.rotation.y, data.transform.rotation.z, data.transform.rotation.w])
-			#The order of rotation so happens that phi is actually psi. Hence eulerAng[0] is used.
-			q[2][0]=eulerAng[0]
-			wantData=False
-	bot_loc[:,args]=np.array([data.transform.translation.x,data.transform.translation.y])
+#               if wantData:
+#                       q[0][0]=data.transform.translation.x
+#                       q[1][0]=data.transform.translation.y
+#                       eulerAng=quat2eul([data.transform.rotation.x, data.transform.rotation.y, data.transform.rotation.z, data.transform.rotation.w])
+                        #The order of rotation so happens that phi is actually psi. Hence eulerAng[0] is used.
+#                       q[2][0]=eulerAng[0]
+#                       wantData=False
+#       bot_loc[:,args]=np.array([data.transform.translation.x,data.transform.translation.y])
+#############################################################################
 
 
 #This stores the the status of each bot whther it is moving or not. The voronoi computation happens only if no bots are movie.
@@ -389,11 +411,11 @@ def torqueController():
 	rospy.init_node('torqueController',anonymous=True)
 	previousCallbackTime=rospy.get_time()
 	###################Change for each bot###################
-	pub_PWM=rospy.Publisher('pwmCmd0',PwmInput,queue_size=10)
+	pub_PWM=rospy.Publisher('pwmCmd1',PwmInput,queue_size=10)
 	#########################################################
 
 	#####################Change for each bot###########################
-	pub_myStatus=rospy.Publisher('botStatus0',botStatus,queue_size=10)
+	pub_myStatus=rospy.Publisher('botStatus1',botStatus,queue_size=10)
 	###################################################################
 
 	#VICON data subscriber. Change the name to the required name here.
@@ -403,7 +425,7 @@ def torqueController():
     	rospy.Subscriber("/vicon/vijeth_3/vijeth_3", TransformStamped, callbackVICON,3)
 
 	#####################Change for each bot#########################
-    	rospy.Subscriber('botStatus1', botStatus, callbackBotStatus,1)
+    	rospy.Subscriber('botStatus0', botStatus, callbackBotStatus,0)
     	rospy.Subscriber('botStatus2', botStatus, callbackBotStatus,2)
     	rospy.Subscriber('botStatus3', botStatus, callbackBotStatus,3)
     	#################################################################
@@ -430,35 +452,38 @@ def torqueController():
     			#Computing the Voronoi partition for this bot.
     			partition=voronoi(pos_grid,N_bots,BotNumber,bot_loc)
 
-			if not firstRun:
-				#Here we first update the a_hat parameter. Once the bot moves to the new position we will compute the Voronoi partition. This partition we will
-				#then use to compute the a_hat. The update of a_hat happens after every 1 mpotion cycle so the time period is taken to be time for Motion. This
-				# is essentially the same as assuming that all time stops when the bot is computing Voronoi parition and the update of parameters happens only
-				#at these stops. The time between the stops is dt. The first time we compute a_hat we will obviously avoid a_hat update but we will do that for every subsequent update.
-				#** Index of Q gives the coordinates (row and col numbers. Not metric co-od.) of the closest grid point to the bot location
-        	                indexOfQ=nearestIndex(q)
+#			if not firstRun:
+#				#Here we first update the a_hat parameter. Once the bot moves to the new position we will compute the Voronoi partition. This partition we will
+#				#then use to compute the a_hat. The update of a_hat happens after every 1 mpotion cycle so the time period is taken to be time for Motion. This
+#				# is essentially the same as assuming that all time stops when the bot is computing Voronoi parition and the update of parameters happens only
+#				#at these stops. The time between the stops is dt. The first time we compute a_hat we will obviously avoid a_hat update but we will do that for every subsequent update.
+#				#** Index of Q gives the coordinates (row and col numbers. Not metric co-od.) of the closest grid point to the bot location
+#        	                indexOfQ=nearestIndex(q)
 
-	                        #**lambdaDot=alpha*lambda+Ki^TKi
-        	                phi_hat=a_hat[0]*K[:,:,0]+a_hat[1]*K[:,:,1]+a_hat[2]*K[:,:,2]+a_hat[3]*K[:,:,3]+a_hat[4]*K[:,:,4]
-                	        lambda_up_dot=-alpha*lambda_up+np.matrix(K[indexOfQ[0],indexOfQ[1],:]).transpose()*np.matrix(K[indexOfQ[0],indexOfQ[1],:])
-                        	lambda_low_dot=-alpha*lambda_low+phi_hat[indexOfQ[0],indexOfQ[1]]* K[indexOfQ[0],indexOfQ[1],:]
+#	                        #**lambdaDot=alpha*lambda+Ki^TKi
+#        	                phi_hat=a_hat[0]*K[:,:,0]+a_hat[1]*K[:,:,1]+a_hat[2]*K[:,:,2]+a_hat[3]*K[:,:,3]+a_hat[4]*K[:,:,4]
+#                	        lambda_up_dot=-alpha*lambda_up+np.matrix(K[indexOfQ[0],indexOfQ[1],:]).transpose()*np.matrix(K[indexOfQ[0],indexOfQ[1],:])
+#                        	lambda_low_dot=-alpha*lambda_low+phi_hat[indexOfQ[0],indexOfQ[1]]*K[indexOfQ[0],indexOfQ[1],:]
 
-	                        lambda_up=lambda_up_dot*timeForMotion+lambda_up
-        	                lambda_low=lambda_low_dot*timeForMotion+lambda_low_dot
+#	                        lambda_up=lambda_up_dot*timeForMotion+lambda_up
+#        	                lambda_low=lambda_low_dot*timeForMotion+lambda_low_dot
 
-                	        BI=bi(partition,pos_grid,K,a_hat,grid_Res,q,vel,lambda_up,lambda_low)
-				a_hat_dot=np.array([0.0,0.0,0.0,0.0,0.0])
-				for count in range(a_hat.size):
-                        		if a_hat[count]>a_min[count] or (a_hat[count]==a_min[count] and BI[count]>0):
-                                		a_hat_dot[count]=Gamma*BI[count]
-                        		else:
-                                		a_hat_dot[count]=0
-                                		a_hat[count]=a_min[count]
-                        	print "a_hat_dot",a_hat_dot
-                        	a_hat=a_hat_dot*timeForMotion + a_hat
-                        	print "a_hat", a_hat
-				print "a",a
-			firstRun=False
+#                	        BI=bi(partition,pos_grid,K,a_hat,grid_Res,q,vel,lambda_up,lambda_low)
+#				a_hat_dot=np.array([0.0,0.0,0.0,0.0,0.0])
+#				for count in range(a_hat.size):
+#                        		if a_hat[count]>a_min[count] or (a_hat[count]==a_min[count] and BI[count]>0):
+#                                		a_hat_dot[count]=Gamma*BI[count]
+#                        		else:
+#                                		a_hat_dot[count]=0
+#                                		a_hat[count]=a_min[count]
+#                        	print "a_hat_dot",a_hat_dot
+                        	#a_hat=a_hat_dot*timeForMotion + a_hat
+#                        	for count in range(a_hat.size):
+#                                        if a_hat[count]<a_min[count]:
+#                                                a_hat[count]=a_min[count]
+#				print "a_hat", a_hat
+#				print "a",a
+#			firstRun=False
 
 			#Computing the mean and weighted mean over this bot's partition.
                         mv=Mv(partition,K,a_hat,grid_Res)
@@ -467,7 +492,7 @@ def torqueController():
    			#Computing the weighted centroid.
   			Cv=lv/mv
 			##############################
-   			print "Centroid for bot 0", Cv
+   			print "Centroid for bot 1", Cv
 			##############################
    			print "Locations for bot 0", bot_loc[:,0]
    			print "Locations for bot 1", bot_loc[:,1]
@@ -533,7 +558,7 @@ def torqueController():
                 logTime=rospy.get_time()-codeStartTime
                 row=[logTime,dt,wR,wL,wdotR,wdotL,pwmInput.rightInput,pwmInput.leftInput,q[2][0],vel[0][0],vel[1][0],tau[0][0],tau[1][0],q[0][0],q[1][0],Cv[0],Cv[1],a_hat[0],a_hat[1],a_hat[2],a_hat[3],a_hat[4]]
                 ########Change for bot################
-                with open('data0.csv','ab') as myfile:
+                with open('data1.csv','ab') as myfile:
                 ######################################
                 	writer=csv.writer(myfile)
                         writer.writerow(row)
