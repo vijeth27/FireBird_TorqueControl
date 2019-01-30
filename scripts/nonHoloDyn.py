@@ -69,7 +69,7 @@ F_bar = np.matrix([[0.01],[0.01]])
 
 #Create reference trajectory. This code only accomadates constant vr and wr. The one below makkes it go in a circle.
 def traj_req(t,dt,qr_prev):
-	vr=0.5		#in m/s
+	vr=0.05		#in m/s
 	wr=0.1		#in rad/s
 	xr_dot=vr*math.cos(qr_prev[2])
 	yr_dot=vr*math.sin(qr_prev[2])
@@ -119,6 +119,7 @@ q0=np.array([[2],[2],[0.5]]) #This has to be changed to checking convergence whi
 q=q0
 q_array=q0
 
+print S(q).transpose()*S(q)
 #Defining the initial velocity in cotinuatuion of defining the initial state of the bot.
 vel0 = np.array([[0],[0]])
 vel = vel0
@@ -168,11 +169,11 @@ for t in np.linspace(start,stop,steps):
 	tau_array=np.concatenate((tau_array,np.array(torque(q,q_dot,vel,u))),axis=1) 
 
 
-#plt.plot(qr_array[0],qr_array[1])
-#plt.plot(q_array[0],q_array[1])
+plt.plot(qr_array[0],qr_array[1])
+plt.plot(q_array[0],q_array[1])
 #plt.plot(np.linspace(start,stop,steps+1),tau_array[1])
 #plt.plot(np.linspace(start,stop,steps+1),tau_array[0])
 #plt.plot(np.linspace(start,stop,steps+1),vel_array[0])
 #plt.plot(np.linspace(start,stop,steps+1),vel[0])
 
-#plt.show()
+plt.show()
