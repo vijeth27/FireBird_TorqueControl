@@ -14,6 +14,8 @@ def callback(pwmInput):
 	ser.write('A') # ~ is \x7E
     rightPWM=pwmInput.rightInput
     leftPWM=pwmInput.leftInput
+
+    #Ensuring the wheels are set to rotate in the correct direction for each scenario.
     if (rightPWM>=0) and (leftPWM>=0):
         ser.write('8')
     else if (rightPWM<0) and (leftPWM>=0):
@@ -24,9 +26,16 @@ def callback(pwmInput):
         ser.write('2')
     else:
         ser.write('5') #Should never occur
+
+    #To ensure the signal sent is never larger than a byte. Probably happens automatically but safegaurd.
+    if (rightPWM>255) or (rightPWM<-255):
+        rightPWM=255
+    if (leftPWM>255) or (leftPWM<-255):
+        leftPWM=255 
+
     #The C code on the bot accepts left motor velocity first.
-    ser.write(struct.pack('>B',leftPWM))
-    ser.write(struct.pack('>B',rightPWM))
+    ser.write(struct.pack('>B',abs(leftPWM)))
+    ser.write(struct.pack('>B',abs(rightPWM)))
 
 def encoderOut():
 	rospy.Subscriber('pwmCmd', PwmInput, callback)
