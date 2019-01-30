@@ -7,6 +7,7 @@ from fb5_torque_ctrl.msg import encoderData
 from fb5_torque_ctrl.msg import PwmInput
 import math
 from geometry_msgs.msg import TransformStamped
+from tf.transformations import euler_from_quaternion
 #Defining as global variable for loging
 pwmInput=PwmInput()
 codeStartTime=0
@@ -177,7 +178,9 @@ def callbackVICON(data):
 	global q
 	q[0][0]=data.transform.translation.x
 	q[0][1]=data.transform.translation.y
-	q[0][2]=data.transform.rotation.w	
+	eulerAng=euler_from_quaternion([data.transform.rotation.x, data.transform.rotation.y, data.transform.rotation.z, data.transform.rotation.w])
+	q[0][2]=eulerAng[2]
+	print "Euler Angle", eulerAng
 	print "[x_pos,y_pos,w_quat]",q
 
 def torqueController():
