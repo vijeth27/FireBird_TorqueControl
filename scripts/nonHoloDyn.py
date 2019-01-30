@@ -1,12 +1,12 @@
 import numpy as np
 import math
-import matplotlib.pyplot as plt  
+import matplotlib.pyplot as plt
 
 #Defining the bot properties the best we know
-m=0.2 #mass in kg
-d=5.0 #distance from 
-R=0.075
-r=0.025
+m=1.72 #mass in kg
+d=0.065 #distance from CG to axis
+R=0.085	#Semi-Distance between wheels
+r=0.025 #Radius of wheels
 
 
 #Controller gains
@@ -39,7 +39,7 @@ def V(q,q_dot):
 	global d
 	global m
 	coriolis=np.matrix([[0, 0, m*d*(q_dot[2])*math.cos(q[2])],[0, 0, m*d*(q_dot[2])*math.sin(q[2])],[0, 0, 0]])
-	return coriolis	
+	return coriolis
 
 def B(q):
 	global R
@@ -52,7 +52,7 @@ def B(q):
 #By calculation we obtain B_bar as [[1/r,1/r],[R/r -R/r]]
 def B_bar(q):
 	b_bar=S(q).transpose()*B(q)
-	return b_bar	
+	return b_bar
 
 #By calculation we obtain M_bar as [[m 0],[0 1-md^2]].
 def M_bar(q):
@@ -86,7 +86,7 @@ def torque(q,q_dot,v,u):
 #Rotation matrix from body frame to inertial frame
 def rot2body(q):
 	rotmat=np.matrix([[math.cos(q[2]), math.sin(q[2]), 0],[-math.sin(q[2]), math.cos(q[2]), 0],[0, 0, 1]])
-	return rotmat 
+	return rotmat
 
 #The control velocity required
 def vc(e,vr,wr):
@@ -148,7 +148,7 @@ for t in np.linspace(start,stop,steps):
 	qr_prev=qr
 
 	#Controller
-	u=np.array(vc_dot(e,vel,vel_ref,w_ref)) + k4*(vc(e,vel_ref,w_ref)-vel) 
+	u=np.array(vc_dot(e,vel,vel_ref,w_ref)) + k4*(vc(e,vel_ref,w_ref)-vel)
 
 	#Propagating the velocity
 	v_dot=u
@@ -156,7 +156,7 @@ for t in np.linspace(start,stop,steps):
 	vel_array=np.concatenate((vel_array,vel),axis=1)
 
 	#Propagating the states
-	q_dot=np.array(S(q)*np.matrix(vel)) 	
+	q_dot=np.array(S(q)*np.matrix(vel))
 	q=q+q_dot*dt
 	q_array=np.concatenate((q_array,q),axis=1)
 
@@ -167,11 +167,12 @@ for t in np.linspace(start,stop,steps):
 	#Torque to be sent at each instant
 	tau_array=np.concatenate((tau_array,np.array(torque(q,q_dot,vel,u))),axis=1) 
 
+
 #plt.plot(qr_array[0],qr_array[1])
 #plt.plot(q_array[0],q_array[1])
-plt.plot(np.linspace(start,stop,steps+1),tau_array[1])
-plt.plot(np.linspace(start,stop,steps+1),tau_array[0])
+#plt.plot(np.linspace(start,stop,steps+1),tau_array[1])
+#plt.plot(np.linspace(start,stop,steps+1),tau_array[0])
 #plt.plot(np.linspace(start,stop,steps+1),vel_array[0])
 #plt.plot(np.linspace(start,stop,steps+1),vel[0])
 
-plt.show()
+#plt.show()
