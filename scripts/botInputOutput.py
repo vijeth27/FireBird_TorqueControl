@@ -12,11 +12,21 @@ ser.flushOutput()
 ser.write('8')
 def callback(pwmInput):
 	ser.write('A') # ~ is \x7E
+    rightPWM=pwmInput.rightInput
+    leftPWM=pwmInput.leftInput
+    if (rightPWM>=0) and (leftPWM>=0):
         ser.write('8')
-        rightPWM=pwmInput.rightInput
-        leftPWM=pwmInput.leftInput
-        ser.write(struct.pack('>B',leftPWM))
-        ser.write(struct.pack('>B',rightPWM))
+    else if (rightPWM<0) and (leftPWM>=0):
+        ser.write('6')
+    else if (rightPWM>=0) and (leftPWM<0):
+        ser.write('4')
+    else if (rightPWM<0) and (leftPWM<0):
+        ser.write('2')
+    else:
+        ser.write('5') #Should never occur
+    #The C code on the bot accepts left motor velocity first.
+    ser.write(struct.pack('>B',leftPWM))
+    ser.write(struct.pack('>B',rightPWM))
 
 def encoderOut():
 	rospy.Subscriber('pwmCmd', PwmInput, callback)
