@@ -7,7 +7,8 @@ from fb5_torque_ctrl.msg import encoderData
 from fb5_torque_ctrl.msg import PwmInput
 import math
 from geometry_msgs.msg import TransformStamped
-from tf.transformations import euler_from_quaternion
+
+#from tf.transformations import euler_from_quaternion
 #Defining as global variable for loging
 pwmInput=PwmInput()
 codeStartTime=0
@@ -137,6 +138,25 @@ def e_dot(e,v,vr,wr):
 
 #Torque measurements
 #tau_array=np.array([[0],[0]]) #For storage maybe
+
+
+#Since tf package can't be directly installed on RasPi the function below has be written. 
+#Note that this function cannot handle singularities. It gives ZYX rotation Euler angles in radian.
+def quat2eul(q):
+	#Computing Phi
+	phi = math.atan2(2*(q[0]*q[1]+q[2]*q[3]),1-2*(q[1]**2+q[2]**2))
+	
+	#Computing Theta
+	#Introducing a check to avoid numerical errors
+	sinTheta=2*(q[0]*q[2]-q[1]*q[3])
+	if sinTheta>=1:
+		theta=math.pi/2
+	else:
+		theta=math.asin(sinTheta)
+
+	#Computing Psi
+	psi=math.atan2(2*(q[0]*q[3]+q[2]*q[1]),1-2*(q[2]**2+q[3]**2))
+	return np.array([[phi],[theta],[psi]])
 
 
 ####################################################################
