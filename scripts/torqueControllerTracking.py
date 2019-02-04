@@ -3,6 +3,7 @@ import rospy
 import csv
 import time
 import struct
+import numpy as np
 from fb5_torque_ctrl.msg import encoderData
 from fb5_torque_ctrl.msg import PwmInput
 import math
@@ -156,22 +157,22 @@ def callback(data):
 	#30 counts is one rotation of the wheel i.e. 2*pi radian
 	duration=0.04 #25 Hz
 	wR=(data.encoderR-encRPrev)*2*math.pi/30/duration
-    wL=(data.encoderL-encLPrev)*2*math.pi/30/duration
-    wdotR=(wR-wRprev)/duration
-    wdotL=(wL-wLprev)/duration
-    wddotR=(wdotR-wdotRprev)/duration
-    wddotL=(wdotL-wdotLprev)/duration
+    	wL=(data.encoderL-encLPrev)*2*math.pi/30/duration
+   	wdotR=(wR-wRprev)/duration
+    	wdotL=(wL-wLprev)/duration
+   	wddotR=(wdotR-wdotRprev)/duration
+    	wddotL=(wdotL-wdotLprev)/duration
 	encRPrev=data.encoderR
 	encLPrev=data.encoderL
 	wRprev=wR
 	wLprev=wL
 	wdotRprev=wdotR
 	wdotLprev=wdotL
-    logTime=rospy.get_time()-codeStartTime
-    row=[logTime,data.interval,data.encoderR,data.encoderL,wR,wL,wdotR,wdotL,wddotR,wddotL,pwmInput.rightInput,pwmInput.leftInput]
-    with open('data.csv','ab') as myfile:
-        writer=csv.writer(myfile)
-        writer.writerow(row)
+    	logTime=rospy.get_time()-codeStartTime
+    	row=[logTime,data.interval,data.encoderR,data.encoderL,wR,wL,wdotR,wdotL,wddotR,wddotL,pwmInput.rightInput,pwmInput.leftInput]
+    	with open('data.csv','ab') as myfile:
+        	writer=csv.writer(myfile)
+        	writer.writerow(row)
 	#print(rospy.get_time()-codeStartTime-logTime) #Just to see how long this logging takes
 
 def callbackVICON(data):
@@ -195,17 +196,15 @@ def torqueController():
 	#global wdotRprev
 	#global wdotLprev
 	#############################################################
-	
 	rospy.init_node('torqueController',anonymous=True)
-    rospy.Subscriber('encoderData', encoderData, callback)
+    	rospy.Subscriber('encoderData', encoderData, callback)
 	pub_PWM=rospy.Publisher('pwmCmd',PwmInput,queue_size=10)
 
 	#VICON data subscriber. Change the name to the required name here. 
-    rospy.Subscriber("/vicon/vijeth_0/vijeth_0", TransformStamped, callbackVICON)
+    	rospy.Subscriber("/vicon/vijeth_0/vijeth_0", TransformStamped, callbackVICON)
 
-    #The torque controller outputs commands at only 10Hz.
+    	#The torque controller outputs commands at only 10Hz.
 	#The encoder data is still at 25 Hz as determined by the publisher in the other file
-	
 	#############################################################
 	#Defning the initial point for bot the reference trajectory and the bot.
 	#qr0=np.array([[0.0],[0.0],[0.0]])
@@ -220,7 +219,7 @@ def torqueController():
 	#Time parameters and initialisation
 	#dt=1.0
 	#timeLoopEnd=rospy.get_time()
-	
+
 	#Defining the initial velocity in cotinuatuion of defining the initial state of the bot.
 	#vel0 = np.array([[0],[0]])
 	#vel = vel0
@@ -235,8 +234,8 @@ def torqueController():
 	codeStartTime=rospy.get_time()
 	rate = rospy.Rate(10)
 	timeSinceInput=rospy.get_time()
-    timeBetInputs=5
-    while not rospy.is_shutdown():
+   	timeBetInputs=5
+    	while not rospy.is_shutdown():
 		#############################################################
 		#Defning the initial point for bot the reference trajectory and the bot.
 		#qr0=np.array([[0.0],[0.0],[0.0]])
@@ -250,7 +249,6 @@ def torqueController():
 
 		#dt=timeLoopEnd-rospy.get_time()
 		#print "dt:", dt
-		
 		#q_dot = (q-q_prev)/dt
 
 		#Velocity of states
@@ -286,10 +284,10 @@ def torqueController():
 		#############################################################
 		i=0
 		while i<2:
-			pwmInput.rightInput=100*i
-			pwmInput.leftInput=100*i
-            #rospy.loginfo(pwmInput)
-            pub_PWM.publish(pwmInput)
+			pwmInput.rightInput=150*i
+			pwmInput.leftInput=-150*i
+            		#rospy.loginfo(pwmInput)
+	        	pub_PWM.publish(pwmInput)
 			if((rospy.get_time()-timeSinceInput)>=timeBetInputs):
 				timeSinceInput=rospy.get_time()
                                 i=i+1

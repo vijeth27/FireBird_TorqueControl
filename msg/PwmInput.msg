@@ -1,2 +1,2 @@
-uint8 rightInput
-uint8 leftInput
+int16 rightInput
+int16 leftInput
