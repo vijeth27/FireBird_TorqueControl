@@ -50,7 +50,7 @@ def callback(data):
         with open('data.csv','ab') as myfile:
                 writer=csv.writer(myfile)
                 writer.writerow(row)
-	print(rospy.get_time()-codeStartTime-logTime) #Just to see how long this logging takes
+	#print(rospy.get_time()-codeStartTime-logTime) #Just to see how long this logging takes
 
 def torqueController():
 	global pwmInput
@@ -66,10 +66,10 @@ def torqueController():
         timeBetInputs=5
         while not rospy.is_shutdown():
 		i=0
-		while i<2:
-			pwmInput.rightInput=200*i
-			pwmInput.leftInput=200*i
-                        #rospy.loginfo(pwmInput)
+		while i<5:
+			pwmInput.rightInput=50+10*i
+			pwmInput.leftInput=50+10*i
+                        print 50+10*i
                         pub_PWM.publish(pwmInput)
 			if((rospy.get_time()-timeSinceInput)>=timeBetInputs):
 				timeSinceInput=rospy.get_time()
