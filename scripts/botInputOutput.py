@@ -26,12 +26,17 @@ def callback(pwmInput):
         	ser.write('2')
     	else:
         	ser.write('5') #Should never occur
-
+	lowPWM_R=115
     	#To ensure the signal sent is never larger than a byte. Probably happens automatically but safegaurd.
     	if (rightPWM>255) or (rightPWM<-255):
         	rightPWM=255
+	elif (rightPWM<lowPWM_R) or (rightPWM>-lowPWM_R):  #Below 90 PWM we observe that bot doesn't move at all hence we force it along
+		rightPWM=lowPWM_R
+	lowPWM_L=105
     	if (leftPWM>255) or (leftPWM<-255):
         	leftPWM=255
+	elif (leftPWM<lowPWM_L) or (leftPWM>-lowPWM_L):  #Below 90 PWM we observe that bot doesn't move at all hence we force it along
+		leftPWM=lowPWM_L
 
     	#The C code on the bot accepts left motor velocity first.
     	ser.write(struct.pack('>B',abs(leftPWM)))
