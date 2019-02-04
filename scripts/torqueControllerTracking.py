@@ -9,25 +9,42 @@ from fb5_torque_ctrl.msg import PwmInput
 import math
 from geometry_msgs.msg import TransformStamped
 
-#from tf.transformations import euler_from_quaternion
 #Defining as global variable for loging
-pwmInput=PwmInput()
-codeStartTime=0
-#The experimental data is added to the data.csv file
-head=['time','interval','encR','encL','wR','wL','wdotR','wdotL','wddotR','wddotL','pwmR','pwmL']
-with open('data.csv','w') as myfile:
-	writer=csv.writer(myfile)
-	writer.writerow(head)
+q=np.array([[0.0],[0.0],[0.0]])
+qr=np.array([[0.0],[0.0],[0.0]])
+q_prev=q
+
+#Defining the initial velocity in cotinuatuion of defining the initial state of the bot.
+vel = np.array([[0.0],[0.0]])
+
+#Defningin control as global variable for logging
+u = np.array([[0.0],[0.0]])
+tau = np.array([[0.0],[0.0]])
+
+
+#Encoder Variables
+wR=0
+wL=0
+wdotR=0
+wdotL=0
 encRPrev=0
 encLPrev=0
 wRprev=0
 wLprev=0
 wdotRprev=0
 wdotLprev=0
+phi=0.0
+theta=0.0
+psi=0.0
 
+pwmInput=PwmInput()
+codeStartTime=0
 
-####################################################################
-####################################################################
+#The experimental data is added to the data.csv file
+head=['time','interval','encR','encL','wR','wL','wdotR','wdotL','wddotR','wddotL','pwmR','pwmL','x','y','theta','x_ref','y_ref','theta_ref','vel_v','vel_w','e_x','e_y','e_theta','u_R','u_L','tau_R','tau_L']
+with open('data.csv','w') as myfile:
+	writer=csv.writer(myfile)
+	writer.writerow(head)
 
 #Defining the bot properties the best we know
 m=1.72 #mass in kg
@@ -36,10 +53,19 @@ R=0.085	#Semi-Distance between wheels
 r=0.025 #Radius of wheels
 
 #Controller gains
-k1=1
-k2=1
-k3=1
+k1=12	#k1=12 Best Result so far
+k2=12	#k2=12 Best Result so far
+k3=3	#k3=3  Best Result so far
 k4=1
+
+#Torque to PWM
+#We will neglect the w_ddot term as well as the tau_dot terms. The former is difficult to obtain with our current encoder.
+#The latter is eliminated as its computations are quite tedious.
+K_wdot=0.088			#(b+RJ/Kt). This is the coefficient of w_dot
+K_w=0.003
+K_tau_R=18000
+K_tau_L=18000
+
 
 #Defining the nonlinear system properties.
 def S(q):
@@ -49,9 +75,7 @@ def S(q):
 
 def S_dot(q,q_dot):
 	global d
-
 	s_dot=np.matrix([[-math.sin(q[2])*(q_dot[2][0]), -d*math.cos(q[2])*(q_dot[2][0])],[math.cos(q[2])*(q_dot[2][0]), -d*math.sin(q[2])*(q_dot[2][0])],[0, 0]])
-	#print "s_dot:", s_dot
 	return s_dot
 
 def M(q):
@@ -72,8 +96,6 @@ def B(q):
 	cont_transform=1/r*np.matrix([[math.cos(q[2]), math.cos(q[2])],[math.sin(q[2]), math.sin(q[2])],[R, -R]])
 	return cont_transform
 
-#def M_bar, B_bar, V_bar and F_bar.
-
 #By calculation we obtain B_bar as [[1/r,1/r],[R/r -R/r]]
 def B_bar(q):
 	b_bar=S(q).transpose()*B(q)
@@ -86,7 +108,6 @@ def M_bar(q):
 
 #By calculation we get V_bar as a 2x2 null matrix.
 def V_bar(q,q_dot):
-	#print "MSdot:", M(q)*S_dot(q,q_dot)
 	return S(q).transpose()*(M(q)*S_dot(q,q_dot)+V(q,q_dot)*S(q))
 
 #Assume constant rolling friction acting opposite to the direction of motion.
@@ -94,11 +115,15 @@ F_bar = np.matrix([[0.01],[0.01]])
 
 #Create reference trajectory. This code only accomadates constant vr and wr. The one below makkes it go in a circle.
 def traj_req(t,dt,qr_prev):
-	vr=0.05		#in m/s
+	vr=0.1		#in m/s
 	wr=0.1		#in rad/s
 	xr_dot=vr*math.cos(qr_prev[2])
 	yr_dot=vr*math.sin(qr_prev[2])
 	thetar=qr_prev[2]+wr*dt
+	if thetar>math.pi:
+		thetar=thetar-2*math.pi
+	if thetar<-math.pi:
+		thetar=thetar+2*math.pi
 	xr=qr_prev[0][0]+xr_dot*dt
 	yr=qr_prev[1]+yr_dot*dt
 	return np.array([[xr],[yr],[thetar],[vr],[wr]])
@@ -137,31 +162,27 @@ def e_dot(e,v,vr,wr):
 	e3=wr-v[1]
 	return np.array([e1,e2,e3])
 
-#Torque measurements
-#tau_array=np.array([[0],[0]]) #For storage maybe
-
-
-#Since tf package can't be directly installed on RasPi the function below has be written. 
+#Since tf package can't be directly installed on RasPi the function below has be written.
 #Note that this function cannot handle singularities. It gives ZYX rotation Euler angles in radian.
-def quat2eul(q):
+def quat2eul(qu):
+	global phi
+	global theta
+	global psi
 	#Computing Phi
-	phi = math.atan2(2*(q[0]*q[1]+q[2]*q[3]),1-2*(q[1]**2+q[2]**2))
-	
+	phi = math.atan2(2*(qu[0]*qu[1]+qu[2]*qu[3]),1-2*(qu[1]**2+qu[2]**2))
+
 	#Computing Theta
 	#Introducing a check to avoid numerical errors
-	sinTheta=2*(q[0]*q[2]-q[1]*q[3])
+	sinTheta=2*(qu[0]*qu[2]-qu[1]*qu[3])
 	if sinTheta>=1:
 		theta=math.pi/2
 	else:
 		theta=math.asin(sinTheta)
 
 	#Computing Psi
-	psi=math.atan2(2*(q[0]*q[3]+q[2]*q[1]),1-2*(q[2]**2+q[3]**2))
+	psi=math.atan2(2*(qu[0]*qu[3]+qu[2]*qu[1]),1-2*(qu[2]**2+qu[3]**2))
 	return np.array([[phi],[theta],[psi]])
 
-
-####################################################################
-####################################################################
 def callback(data):
 	global encRPrev
 	global encLPrev
@@ -171,13 +192,24 @@ def callback(data):
 	global wdotLprev
 	global pwmInput
 	global codeStartTime
-
-	#rospy.loginfo(rospy.get_caller_id''() + "I heard %s", data)
+	global phi
+	global theta
+	global psi
+	global q
+	global qr
+	global vel
+	global e
+	global u
+	global tau
+	global wR
+	global wL
+	global wdotR
+	global wdotL
 	#['interval','encR','encL','wR','wL','wdotR','wdotL','wddotR','wddotL']
 	#30 counts is one rotation of the wheel i.e. 2*pi radian
 	duration=0.04 #25 Hz
-	wR=(data.encoderR-encRPrev)*2*math.pi/30/duration
-    	wL=(data.encoderL-encLPrev)*2*math.pi/30/duration
+	wR=(data.encoderR-encRPrev)*2*math.pi/512/duration
+    	wL=(data.encoderL-encLPrev)*2*math.pi/512/duration
    	wdotR=(wR-wRprev)/duration
     	wdotL=(wL-wLprev)/duration
    	wddotR=(wdotR-wdotRprev)/duration
@@ -189,7 +221,7 @@ def callback(data):
 	wdotRprev=wdotR
 	wdotLprev=wdotL
     	logTime=rospy.get_time()-codeStartTime
-    	row=[logTime,data.interval,data.encoderR,data.encoderL,wR,wL,wdotR,wdotL,wddotR,wddotL,pwmInput.rightInput,pwmInput.leftInput]
+    	row=[logTime,data.interval,data.encoderR,data.encoderL,wR,wL,wdotR,wdotL,wddotR,wddotL,pwmInput.rightInput,pwmInput.leftInput,q[0][0],q[1][0],q[2][0],qr[0][0],qr[1][0],qr[2][0],vel[0][0],vel[1][0],e[0][0],e[1][0],e[2][0],u[0][0],u[1][0],tau[0][0],tau[1][0]]
     	with open('data.csv','ab') as myfile:
         	writer=csv.writer(myfile)
         	writer.writerow(row)
@@ -198,125 +230,84 @@ def callback(data):
 def callbackVICON(data):
 	global q
 	q[0][0]=data.transform.translation.x
-	q[0][1]=data.transform.translation.y
-	eulerAng=euler_from_quaternion([data.transform.rotation.x, data.transform.rotation.y, data.transform.rotation.z, data.transform.rotation.w])
-	q[0][2]=eulerAng[2]
-	print "Euler Angle", eulerAng
-	print "[x_pos,y_pos,w_quat]",q
+	q[1][0]=data.transform.translation.y
+	eulerAng=quat2eul([data.transform.rotation.x, data.transform.rotation.y, data.transform.rotation.z, data.transform.rotation.w])
+	#The order of rotation so happens that phi is actually psi. Hence eulerAng[0] is used.
+	q[2][0]=eulerAng[0]
+
+#Defining error vectors. All propagation will happen with this.
+e = np.array(rot2body(q)*np.matrix(qr-q))
 
 def torqueController():
 	global pwmInput
 	global codeStartTime
-	#############################################################
-	#global q
-	#global encRPrev
-	#global encLPrev
-	#global wRprev
-	#global wLprev
-	#global wdotRprev
-	#global wdotLprev
-	#############################################################
+	global q
+	global qr
+	global vel
+	global encRPrev
+	global encLPrev
+	global wRprev
+	global wLprev
+	global wdotRprev
+	global wdotLprev
+	global e
+	global u
+	global tau
+	global K_tau
+	global wR
+	global wL
+	global wdotR
+	global wdotL
 	rospy.init_node('torqueController',anonymous=True)
     	rospy.Subscriber('encoderData', encoderData, callback)
 	pub_PWM=rospy.Publisher('pwmCmd',PwmInput,queue_size=10)
 
-	#VICON data subscriber. Change the name to the required name here. 
+	#VICON data subscriber. Change the name to the required name here.
     	rospy.Subscriber("/vicon/vijeth_0/vijeth_0", TransformStamped, callbackVICON)
 
     	#The torque controller outputs commands at only 10Hz.
 	#The encoder data is still at 25 Hz as determined by the publisher in the other file
-	#############################################################
 	#Defning the initial point for bot the reference trajectory and the bot.
-	#qr0=np.array([[0.0],[0.0],[0.0]])
-	#qr_prev=qr0
-	#qr_array=qr0 #For storage maybe
-
-	#q0=np.array([[2],[2],[0.5]]) #This has to be changed to checking convergence while tracking.
-	#q=q0 		#This has been randomly initialised will be overwritten by the VICON data right away.
-	#qprev=q0
-	#q_array=q0 #For storage maybe
-
+	qr0=np.array([[0.0],[0.0],[0.0]])
+	qr_prev=qr0
+	qr_array=qr0 #For storage maybe
+	q_prev=q
 	#Time parameters and initialisation
-	#dt=1.0
-	#timeLoopEnd=rospy.get_time()
+	dt=0.01
+	timeLoopEnd=rospy.get_time()
 
-	#Defining the initial velocity in cotinuatuion of defining the initial state of the bot.
-	#vel0 = np.array([[0],[0]])
-	#vel = vel0
-	#vel_array = vel0 #For storage maybe
-
-	#Defining error vectors. All propagation will happen with this.
-	#e0 = np.array(rot2body(q0)*np.matrix(qr0-q0))
-	#e=e0
-	#e_array=e0 #For storage maybe
-	#############################################################
-
-	codeStartTime=rospy.get_time()
 	rate = rospy.Rate(10)
-	timeSinceInput=rospy.get_time()
-   	timeBetInputs=5
     	while not rospy.is_shutdown():
-		#############################################################
-		#Defning the initial point for bot the reference trajectory and the bot.
-		#qr0=np.array([[0.0],[0.0],[0.0]])
-		#qr_prev=qr0
-		#qr_array=qr0 #For storage maybe
-
-		#q0=np.array([[2],[2],[0.5]]) #This has to be changed to checking convergence while tracking.
-		#q=q0 		#This has been randomly initialised will be overwritten by the VICON data right away.
-		#q_array=q0 #For storage maybe
-
-
-		#dt=timeLoopEnd-rospy.get_time()
-		#print "dt:", dt
-		#q_dot = (q-q_prev)/dt
+		dt=rospy.get_time()-timeLoopEnd
+		q_dot = (q-q_prev)/dt
 
 		#Velocity of states
-		#vel0 = np.array([[0],[0]])
-		#vel = np.array((S(q).transpose()*S(q)).I*S(q).transpose()*np.matrix(q_dot))
-		#print "vel:", vel
-
-		#Error in states
-		#e=np.array(rot2body(q)*np.matrix(qr0-q0))
+		vel = np.array((S(q).transpose()*S(q)).I*S(q).transpose()*np.matrix(q_dot))
 
 		#Generating the reference trajectory
-		#ref = traj_req(t,0.2,qr_prev)
-		#qr=ref[:3]
-		#vel_ref=ref[3]
-		#w_ref=ref[4]
-		#qr_array=np.concatenate((qr_array,qr),axis=1)
-		#qr_prev=qr
+		ref = traj_req(rospy.get_time()-codeStartTime,dt,qr_prev)
+		qr=ref[:3]
+		vel_ref=ref[3]
+		w_ref=ref[4]
+		qr_prev=qr
+
+		#Error in states
+		e=np.array(rot2body(q)*np.matrix(qr-q))
 
 		#Controller
-		#u=np.array(vc_dot(e,vel,vel_ref,w_ref)) + k4*(vc(e,vel_ref,w_ref)-vel)
+		u=np.array(vc_dot(e,vel,vel_ref,w_ref)) + k4*(vc(e,vel_ref,w_ref)-vel)
 
 		#Torque to be sent at each instant
-		#tau=np.array(torque(q,q_dot,vel,u))
-		#tau_array=np.concatenate((tau_array,np.array(torque(q,q_dot,vel,u))),axis=1) 
-		#print tau_array
+		tau=np.array(torque(q,q_dot,vel,u))
 
-		#K_tau=100
-		#Tau2PWM=K_tau*tau
-		#print Tau2PWM
+		#Cponverting the torques to PWM inputs.
+                pwmInput.rightInput=K_tau_R*tau[0][0]+K_wdot*wdotR+K_w*wR
+                pwmInput.leftInput=K_tau_L*tau[1][0]+K_wdot*wdotR+K_w*wL
+	        pub_PWM.publish(pwmInput)
 
-		#pwmInput.rightInput=K_tau*tau[0][0]
-		#pwmInput.leftInput=K_tau*tau[0][1]
-		#############################################################
-		i=0
-		while i<2:
-			pwmInput.rightInput=150*i
-			pwmInput.leftInput=-150*i
-            		#rospy.loginfo(pwmInput)
-	        	pub_PWM.publish(pwmInput)
-			if((rospy.get_time()-timeSinceInput)>=timeBetInputs):
-				timeSinceInput=rospy.get_time()
-                                i=i+1
-			rate.sleep()
-		#############################################################
-		#q_prev=q
-		#timeLoopEnd=rospy.get_time()
-		#rate.sleep()
-		#############################################################
+		q_prev=q
+		timeLoopEnd=rospy.get_time()
+		rate.sleep()
 
 if __name__ == '__main__':
     try:
