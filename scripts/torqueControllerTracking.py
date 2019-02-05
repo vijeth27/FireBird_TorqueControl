@@ -53,11 +53,11 @@ R=0.085	#Semi-Distance between wheels
 r=0.025 #Radius of wheels
 
 #Controller gains
-k1=12	#k1=12 Best Result so far
-k2=12	#k2=12 Best Result so far
-k3=3	#k3=3  Best Result so far
-k4=1
-
+k1=11.0	#k1=12 Best Result so far
+k2=11.0	#k2=12 Best Result so far
+k3=2.25	#k3=2.25  Best Result so far
+k4=0.3
+ki=0.1 #Seemed like a logical gain choice
 #Torque to PWM
 #We will neglect the w_ddot term as well as the tau_dot terms. The former is difficult to obtain with our current encoder.
 #The latter is eliminated as its computations are quite tedious.
@@ -111,7 +111,7 @@ def V_bar(q,q_dot):
 	return S(q).transpose()*(M(q)*S_dot(q,q_dot)+V(q,q_dot)*S(q))
 
 #Assume constant rolling friction acting opposite to the direction of motion.
-F_bar = np.matrix([[0.01],[0.01]])
+F_bar = np.matrix([[0.002],[0.002]])
 
 #Create reference trajectory. This code only accomadates constant vr and wr. The one below makkes it go in a circle.
 def traj_req(t,dt,qr_prev):
@@ -242,6 +242,7 @@ def torqueController():
 	global pwmInput
 	global codeStartTime
 	global q
+	global q_prev
 	global qr
 	global vel
 	global encRPrev
@@ -271,10 +272,14 @@ def torqueController():
 	qr0=np.array([[0.0],[0.0],[0.0]])
 	qr_prev=qr0
 	qr_array=qr0 #For storage maybe
-	q_prev=q
+
+	#Initializing the term for the integrator
+	err_int=np.array([[0.0],[0.0],[0.0]])
+	#Initializing
 	#Time parameters and initialisation
 	dt=0.01
 	timeLoopEnd=rospy.get_time()
+	print "This is outside the loop"
 
 	rate = rospy.Rate(10)
     	while not rospy.is_shutdown():
@@ -283,7 +288,8 @@ def torqueController():
 
 		#Velocity of states
 		vel = np.array((S(q).transpose()*S(q)).I*S(q).transpose()*np.matrix(q_dot))
-
+		#print "vel:", vel
+		#print "q_dot:", q_dot
 		#Generating the reference trajectory
 		ref = traj_req(rospy.get_time()-codeStartTime,dt,qr_prev)
 		qr=ref[:3]
@@ -293,9 +299,10 @@ def torqueController():
 
 		#Error in states
 		e=np.array(rot2body(q)*np.matrix(qr-q))
-
+		err_int=e*dt+err_int
+		print "e_int", err_int
 		#Controller
-		u=np.array(vc_dot(e,vel,vel_ref,w_ref)) + k4*(vc(e,vel_ref,w_ref)-vel)
+		u=np.array(vc_dot(e+ki*err_int,vel,vel_ref,w_ref)) + k4*(vc(e+ki*err_int,vel_ref,w_ref)-vel)
 
 		#Torque to be sent at each instant
 		tau=np.array(torque(q,q_dot,vel,u))
@@ -304,7 +311,6 @@ def torqueController():
                 pwmInput.rightInput=K_tau_R*tau[0][0]+K_wdot*wdotR+K_w*wR
                 pwmInput.leftInput=K_tau_L*tau[1][0]+K_wdot*wdotR+K_w*wL
 	        pub_PWM.publish(pwmInput)
-
 		q_prev=q
 		timeLoopEnd=rospy.get_time()
 		rate.sleep()
