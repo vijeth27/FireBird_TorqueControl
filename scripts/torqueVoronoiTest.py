@@ -294,7 +294,9 @@ def torqueController():
 	global botStatuses
 
 	rospy.init_node('torqueController',anonymous=True)
-	pub_PWM=rospy.Publisher('pwmCmd',PwmInput,queue_size=10)
+	###################Change for each bot##################
+	pub_PWM=rospy.Publisher('pwmCmd0',PwmInput,queue_size=10)
+	########################################################
 
 	#####################Change for each bot###########################
 	pub_myStatus=rospy.Publisher('botStatus0',botStatus,queue_size=10)

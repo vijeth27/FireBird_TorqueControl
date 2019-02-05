@@ -53,7 +53,7 @@ K=np.dstack((rv0.pdf(pos_grid), rv1.pdf(pos_grid),rv2.pdf(pos_grid),rv3.pdf(pos_
 
 #Randomly choosen weights to each element in the basis function.
 a=np.array([1.0/2,1.0/4,1.0/3,1.0/9,1.0/5]) 	#np.array([1,1,1,1,1]). This is the actual environmental distribution of the phenomenon.
-a_hat=np.array([1.0/3,1.0/3,1.0/4,1.0/8,1.0/6]) #Estimate of above.
+a_hat=np.array([1.0/2,1.0/4,1.0/3,1.0/9,1.0/5]) #Estimate of above.
 a_min=np.array([1.0/20,1.0/20,1.0/20,1.0/20,1.0/20]) #The a_min determines the lowest value the update parameter should take.
 phi=a[0]*K[:,:,0]+a[1]*K[:,:,1]+a[2]*K[:,:,2]+a[3]*K[:,:,3]+a[4]*K[:,:,4] #Environmental distribution.
 
@@ -198,9 +198,11 @@ def V_bar(q,q_dot):
 F_bar = np.matrix([[0.002],[0.002]])
 
 #Defining the required torque at each instant.
-def torque(q,q_dot,v,u):
+def torque(q,v,Mv,Cv):
 	global F_bar
-	return B_bar(q).I*(M_bar(q)*np.matrix(u)+V_bar(q,q_dot)*np.matrix(v)+F_bar) #Assuming zero disturbance Tau_d
+	global k2
+	global k1
+	return B_bar(q).I*(-k1*Mv*S1(q).transpose()*(np.matrix(q[0:2])-np.matrix(Cv).transpose())-k2*np.matrix(v)+F_bar) #Assuming zero disturbance Tau_d
 
 #Rotation matrix from body frame to inertial frame
 def rot2body(q):
@@ -330,7 +332,9 @@ def torqueController():
 	global wantData
 
 	rospy.init_node('torqueController',anonymous=True)
-	pub_PWM=rospy.Publisher('pwmCmd',PwmInput,queue_size=10)
+	###################Change for each bot###################
+	pub_PWM=rospy.Publisher('pwmCmd0',PwmInput,queue_size=10)
+	#########################################################
 
 	#####################Change for each bot###########################
 	pub_myStatus=rospy.Publisher('botStatus0',botStatus,queue_size=10)
@@ -399,10 +403,10 @@ def torqueController():
    			#Computing the velocity.
    			q_dot = (q-q_prev)/dt #Have to be careful as when the bot is stopped it will set q_prev = q as that script is continously running. But that is what we want. So even thou dt is very large once stopped the first velocity is zero.
 
-			print "q:", q
-			print "q_prev", q_prev
-			print "dt:", dt
-			print "q_dot:", q_dot
+			#print "q:", q
+			#print "q_prev", q_prev
+			#print "dt:", dt
+			#print "q_dot:", q_dot
 
 			#Velocity of states
 			vel = np.array((S(q).transpose()*S(q)).I*S(q).transpose()*np.matrix(q_dot))
@@ -417,12 +421,12 @@ def torqueController():
 			wdot=(w-w_prev)/dt
 			w_prev=w
 
-			print "Wheel w:", w
+			#print "Wheel w:", w
 			wR=w[0][0]
 			wL=w[1][0]
 			wdotR=wdot[0][0]
 			wdotL=wdot[1][0]
-			print "wdot", wdot
+			#print "wdot", wdot
    			####################################
    			####################################
 
@@ -451,33 +455,35 @@ def torqueController():
 
 			#if np.all(a_hat>a_min) or np.all( a_hat=a_min and BI>np.zeros(5)):
 				#print "a_hat > a_min"
-				#a_hat_dot=BI
+				#a_hat_dot=Gamma*BI
 			#else:
 				#a_hat_dot=np.zeros(5)
 				#a_hat=a_min
 
 			#a_hat=a_hat_dot*dt + a_hat
 
-			#Write the one line code below for the controller itself.
+   			#**********************************#
+   			#**********************************#
 
-   			#**********************************#
-   			#**********************************#
+			#Torque to be sent at each instant
+                        tau=np.array(torque(q,vel,mv,Cv))
+                        print "torque", tau
+
+                        #Converting the torques to PWM inputs.
+                        pwmInput.rightInput=K_tau_R*tau[0][0]+K_wdot*wdotR+K_w*wR
+                        pwmInput.leftInput=K_tau_L*tau[1][0]+K_wdot*wdotR+K_w*wL
+                        pub_PWM.publish(pwmInput)
 
    			#Setting the motion for this period.
-   			pwmInput.rightInput=120
-        		pwmInput.leftInput=120
-        		pub_PWM.publish(pwmInput)
+   			#pwmInput.rightInput=120
+        		#pwmInput.leftInput=120
+        		#pub_PWM.publish(pwmInput)
 
 	        	#Updating the isMoving status to true
 	        	myStatus.isMoving=True
         		pub_myStatus.publish(myStatus)
 
-   			####################################
-   			#######Uncomment for velocity#######
-   			####################################
    			wantData=True #Until the next cycle determined by rate.sleep this VICON data will be recieved continously.
-   			####################################
-   			####################################
 
         	#After timeForMotion all bots will stop because of the case below. Subsequently they will re-enter into Voronoi partition computation.
                 elif (rospy.get_time()-timeStartMotion)>timeForMotion and (rospy.get_time()-timeStartMotion)<(timeForMotion+0.5):
@@ -500,8 +506,6 @@ def torqueController():
         		wantData=False
         		####################################
 			####################################
-
-       		#Setting the can
 
 		#dt=rospy.get_time()-timeLoopEnd
 		#q_dot = (q-q_prev)/dt
