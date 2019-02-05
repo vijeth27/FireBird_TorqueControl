@@ -43,7 +43,7 @@ def callback(pwmInput):
     	ser.write(struct.pack('>B',abs(rightPWM)))
 
 def encoderOut():
-	rospy.Subscriber('pwmCmd', PwmInput, callback)
+	rospy.Subscriber('pwmCmd0', PwmInput, callback)
 	pub_encoder=rospy.Publisher('encoderData',encoderData,queue_size=10)
 	rospy.init_node('encoderOut',anonymous=True)
 	rate = rospy.Rate(30) #Since bot sends data at 25hz the publisher will be forced to slow down
