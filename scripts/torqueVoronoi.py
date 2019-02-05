@@ -112,17 +112,20 @@ K_tau_L=18000
 alpha=1
 Gamma=1
 gamma=1
-k1=1
-k2=1
+k1=10
+k2=0.0
 
 pwmInput=PwmInput()
 codeStartTime=0
 
 #The experimental data is added to the data.csv file
-head=['time','interval','wR','wL','wdotR','wdotL','pwmR','pwmL','x','y','theta','vel_v','vel_w','e_x','e_y','e_theta','u_R','u_L','tau_R','tau_L']
-with open('data.csv','w') as myfile:
-	writer=csv.writer(myfile)
-	writer.writerow(head)
+head=['time','interval','wR','wL','wdotR','wdotL','pwmR','pwmL','theta','vel_v','vel_w','tau_R','tau_L','x','y','centroidX','centroidY']
+#########Change for bot#################
+with open('data0.csv','w') as myfile:
+########################################
+        writer=csv.writer(myfile)
+        writer.writerow(head)
+
 
 
 #Since tf package can't be directly installed on RasPi the function below has be written.
@@ -295,7 +298,7 @@ def bi(partition,grid,K,a_hat,grid_res,q,vel,lambda_up,lambda_low):
 	#NotTested this function.
 	for point in partition:
 		integral=integral+np.matrix(K[point[0],point[1],:]).transpose()*np.matrix(grid[point[0],point[1],:]-q[0:1])*dq
-	print "integral in bi", integral
+	#print "integral in bi", integral
 	return np.array((-k1*integral*S1(q)*np.matrix(vel)-gamma*(lambda_up*np.matrix(a_hat).transpose()-np.matrix(lambda_low).transpose())).transpose())[0]
 
 def torqueController():
@@ -357,9 +360,10 @@ def torqueController():
 	w_prev=np.array([[0.0],[0.0]])
 	timeLoopPrev=rospy.get_time()
 
-	timeForMotion=0.5 #We will allow the bot to move for half a second after it has computed the voronoi paritions.
+	timeForMotion=1.0 #We will allow the bot to move for half a second after it has computed the voronoi paritions.
 	myStatus.isMoving=False
 	rate = rospy.Rate(10)
+        codeStartTime=rospy.get_time()
     	while not rospy.is_shutdown():
     		#With the following step and with the callbacks we ensure that the bot knows the status of each ot in real time.  
     		botStatuses[BotNumber]=myStatus.isMoving
@@ -410,7 +414,7 @@ def torqueController():
 
 			#Velocity of states
 			vel = np.array((S(q).transpose()*S(q)).I*S(q).transpose()*np.matrix(q_dot))
-			print "vel:", vel
+			#print "vel:", vel
 
 			#____________________________________________________________________________________________________________________________________________________________________________________
 			#Might have to write code to make q_dot zero after the first time we enter this if condition afterVor Comp. On the other hand since dt is very large vel will be close to zero anyway.
@@ -467,7 +471,7 @@ def torqueController():
 
 			#Torque to be sent at each instant
                         tau=np.array(torque(q,vel,mv,Cv))
-                        print "torque", tau
+                        #print "torque", tau
 
                         #Converting the torques to PWM inputs.
                         pwmInput.rightInput=K_tau_R*tau[0][0]+K_wdot*wdotR+K_w*wR
@@ -475,8 +479,8 @@ def torqueController():
                         pub_PWM.publish(pwmInput)
 
    			#Setting the motion for this period.
-   			#pwmInput.rightInput=120
-        		#pwmInput.leftInput=120
+   			#pwmInput.rightInput=-150
+        		#pwmInput.leftInput=150
         		#pub_PWM.publish(pwmInput)
 
 	        	#Updating the isMoving status to true
@@ -506,6 +510,16 @@ def torqueController():
         		wantData=False
         		####################################
 			####################################
+
+		#Inserting the data into logging
+                #['time','interval','wR','wL','wdotR','wdotL','pwmR','p$
+                logTime=rospy.get_time()-codeStartTime
+                row=[logTime,dt,wR,wL,wdotR,wdotL,pwmInput.rightInput,pwmInput.leftInput,q[2][0],vel[0][0],vel[1][0],tau[0][0],tau[1][0],q[0][0],q[1][0],Cv[0],Cv[1]]
+                ########Change for bot################
+                with open('data0.csv','ab') as myfile:
+                ######################################
+                	writer=csv.writer(myfile)
+                        writer.writerow(row)
 
 		#dt=rospy.get_time()-timeLoopEnd
 		#q_dot = (q-q_prev)/dt
