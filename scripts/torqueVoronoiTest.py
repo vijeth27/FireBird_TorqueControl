@@ -73,6 +73,10 @@ bot_loc=np.empty((2,N_bots));
 q=np.array([[0.0],[0.0],[0.0]])
 q_prev=np.array([[0.0],[0.0],[0.0]])
 
+#Lambda and lambda parameter initialisations.
+lambda_up=np.matrix(np.zeros((5,5)))
+lambda_low=np.zeros(5)
+
 #Defining the initial velocity in cotinuatuion of defining the initial state of the bot.
 vel = np.array([[0.0],[0.0]])
 
@@ -83,16 +87,6 @@ tau = np.array([[0.0],[0.0]])
 #This boolean decideds whther we wish a new data to be taken when the VICON subscriber finds a new data-point.
 #Look at the callbackVICON function to better understand its function.
 wantData=True
-
-#Encoder Variables. Defined as global for logging purposes
-wR=0
-wL=0
-wdotR=0
-wdotL=0
-
-#Lambda and lambda parameter initialisations.
-lambda_up=np.matrix(np.zeros((5,5)))
-lambda_low=np.zeros(5)
 
 #Defining the bot properties the best we know
 m=1.72 #mass in kg
@@ -151,11 +145,6 @@ def S(q):
 	global d
 	s=np.matrix([[math.cos(q[2]), -d*math.sin(q[2])],[math.sin(q[2]), d*math.cos(q[2])],[0, 1]])
 	return s
-
-def S1(q):
-	global d
-	s1=np.matrix([[math.cos(q[2]), -d*math.sin(q[2])],[math.sin(q[2]), d*math.cos(q[2])]])
-	return s1
 
 def S_dot(q,q_dot):
 	global d
@@ -218,21 +207,18 @@ def callbackVICON(data, args):
 	#Also any value assigned equal to the global variable q once in the torqueController loop keeps changing it's value. I kid you not, I struggled for an entire day trying to understand it.
 	#Even if it's assigned at the bottom of the loop it used to change when q was updated after q_prev assignment. (Again, not kidding.)
 	#So we will treat it like a global variable and deal with it in the callback itself.
-	#Also the wantData is only for the q of the current bot and not for the others so we will the bot_loc update outside.
-	if args==BotNumber:
-		if wantData:
+	if wantData:
+		if args==BotNumber:
 			q_prev[0][0]=q[0][0]
 			q_prev[1][0]=q[1][0]
 			q_prev[2][0]=q[2][0]
-
 			q[0][0]=data.transform.translation.x
 			q[1][0]=data.transform.translation.y
 			eulerAng=quat2eul([data.transform.rotation.x, data.transform.rotation.y, data.transform.rotation.z, data.transform.rotation.w])
 			#The order of rotation so happens that phi is actually psi. Hence eulerAng[0] is used.
 			q[2][0]=eulerAng[0]
-			wantData=False
-	bot_loc[:,args]=np.array([data.transform.translation.x,data.transform.translation.y])
-
+		bot_loc[:,args]=np.array([data.transform.translation.x,data.transform.translation.y])
+		#wantData=False
 
 #This stores the the status of each bot whther it is moving or not. The voronoi computation happens only if no bots are movie. 
 def callbackBotStatus(data,args):
@@ -242,16 +228,6 @@ def callbackBotStatus(data,args):
 #Simple Euler distance
 def cartesianDist(a,b):
 	return math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2)
-
-#This is a function that takes the position q[0][0] and q[1][0] and returne the nearest index.
-def nearestIndex(q):
-	global origin
-	global grid_Res
-	global grid_Size
-	index=np.array([0,0])
-	index[0]=int((q[0][0]-origin[0]+grid_Size/2)/0.02)
-	index[1]=int((q[1][0]-origin[0]+grid_Size/2)/0.02)
-	return index
 
 #Writing the Voronoi partition calculator function.
 #This function returns the set of points on the pos_grid which lie within the bot's voronoi partition.
@@ -285,49 +261,37 @@ def Mv(partition,K,a_hat,grid_res):
 		MV=MV+phi_hat[point[0],point[1]]*dq
 	return MV
 
-def bi(partition,grid,K,a_hat,grid_res,q,vel,lambda_up,lambda_low):
-	global k1
-	global gamma
-	integral=np.matrix(np.zeros((5,2)))
-	dq=grid_res*grid_res
-	#NotTested this function.
-	for point in partition:
-		integral=integral+np.matrix(K[point[0],point[1],:]).transpose()*np.matrix(grid[point[0],point[1],:]-q[0:1])*dq
-	print "integral in bi", integral
-	return np.array((-k1*integral*S1(q)*np.matrix(vel)-gamma*(lambda_up*np.matrix(a_hat).transpose()-np.matrix(lambda_low).transpose())).transpose())[0]
-
 def torqueController():
 	global pwmInput
 	global codeStartTime
 	global q
 	global q_prev
 	global vel
+#	global encRPrev
+#	global encLPrev
+#	global wRprev
+#	global wLprev
+#	global wdotRprev
+#	global wdotLprev
 #	global e
 #	global u
 #	global tau
-	global K_tau
-	global wR
-	global wL
-	global wdotR
-	global wdotL
-	global alpha
-	global Gamma
-	global gamma
-	global k1
-	global k2
+#	global K_tau
+#	global wR
+#	global wL
+#	global wdotR
+#	global wdotL
 	global pos_grid
 	global K
 	global bot_loc
 	global q
 	global a
 	global a_hat
-	global a_min
 	global BotNumber
 	global N_bots
 	global myStatus
 	global grid_Res
 	global botStatuses
-	global wantData
 
 	rospy.init_node('torqueController',anonymous=True)
 	pub_PWM=rospy.Publisher('pwmCmd',PwmInput,queue_size=10)
@@ -350,12 +314,12 @@ def torqueController():
 
     	#Time parameters and initialisation
 	dt=0.01
-	w_prev=np.array([[0.0],[0.0]])
 	timeLoopPrev=rospy.get_time()
 
 	timeForMotion=0.5 #We will allow the bot to move for half a second after it has computed the voronoi paritions.
 	myStatus.isMoving=False
 	rate = rospy.Rate(10)
+
     	while not rospy.is_shutdown():
     		#With the following step and with the callbacks we ensure that the bot knows the status of each ot in real time.  
     		botStatuses[BotNumber]=myStatus.isMoving
@@ -379,127 +343,37 @@ def torqueController():
    			print "Locations for bot 1", bot_loc[:,1]
    			print "Locations for bot 2", bot_loc[:,2]
    			print "Locations for bot 3", bot_loc[:,3]
-			#print bi(partition,pos_grid,K,a_hat,grid_Res,q,vel,lambda_up,lambda_low)
+
    			timeStartMotion=rospy.get_time()
-   			firstLoopAfterVor=True
 
    		#Once the Voronoi partitions are computed the bot will be given a green signal to start moving ahead.
    		#It will continue to move for the next timeForMotion duration.
    		if (rospy.get_time()-timeStartMotion)<timeForMotion:
-   			####################################
-   			#######Uncomment for velocity#######
-   			####################################
-   			#Between the following and the final line in this if condition the value of q will remain constant. Further it will only run through this if condition therefore this is where we compute all velocities.
-			wantData=False
-
-   			#Computing actual time for this loop
-   			dt=rospy.get_time()-timeLoopPrev
-   			timeLoopPrev=rospy.get_time()
-
-   			#Computing the velocity.
-   			q_dot = (q-q_prev)/dt #Have to be careful as when the bot is stopped it will set q_prev = q as that script is continously running. But that is what we want. So even thou dt is very large once stopped the first velocity is zero.
-
-			print "q:", q
-			print "q_prev", q_prev
-			print "dt:", dt
-			print "q_dot:", q_dot
-
-			#Velocity of states
-			vel = np.array((S(q).transpose()*S(q)).I*S(q).transpose()*np.matrix(q_dot))
-			print "vel:", vel
-
-			#____________________________________________________________________________________________________________________________________________________________________________________
-			#Might have to write code to make q_dot zero after the first time we enter this if condition afterVor Comp. On the other hand since dt is very large vel will be close to zero anyway.
-			#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-			#Computing wheel RPMS
-			w=np.array(inv(B_bar(q))*np.matrix(vel))
-			wdot=(w-w_prev)/dt
-			w_prev=w
-
-			print "Wheel w:", w
-			wR=w[0][0]
-			wL=w[1][0]
-			wdotR=wdot[0][0]
-			wdotL=wdot[1][0]
-			print "wdot", wdot
-   			####################################
-   			####################################
-
-   			#**********************************#
-   			#******Uncomment for control******#
-   			#**********************************#
-
-   			#**This section does all the computation of the torques required to be fed into the bot.
-
-			#** Index of Q gives the coordinates (row and col numbers. Not metric co-od.) of the closest grid point to the bot location
-   			#indexOfQ=nearestIndex(q)
-
-			#***The following loop is set up so that variables don't get wrongly updated right after the loop when dt is very large.
-   			#if firstLoopAfterVor:
-				#dt=0
-				#firstLoopAfterVor=False
-
-			#**lambdaDot=alpha*lambda+Ki^TKi
-			#lambda_up_dot=-alpha*lambda_up+np.matrix(K[indexOfQ[0],indexOfQ[1],:]).transpose()*np.matrix(K[indexOfQ[0],indexOfQ[1],:])
-			#lambda_low_dot=-alpha*lambda_low+phi[indexOfQ[0],indexOfQ[1]]* K[indexOfQ[0],indexOfQ[1],:]
-
-   			#lambda_up=lambda_up_dot*dt+lambda_up
-   			#lambda_low=lambda_low_dot*dt+lambda_low_dot
-
-			#BI=bi(partition,pos_grid,K,a_hat,grid_Res,q,vel,lambda_up,lambda_low)
-
-			#if np.all(a_hat>a_min) or np.all( a_hat=a_min and BI>np.zeros(5)):
-				#print "a_hat > a_min"
-				#a_hat_dot=BI
-			#else:
-				#a_hat_dot=np.zeros(5)
-				#a_hat=a_min
-
-			#a_hat=a_hat_dot*dt + a_hat
-
-			#Write the one line code below for the controller itself.
-
-   			#**********************************#
-   			#**********************************#
-
    			#Setting the motion for this period.
    			pwmInput.rightInput=120
         		pwmInput.leftInput=120
         		pub_PWM.publish(pwmInput)
 
-	        	#Updating the isMoving status to true
+        	#Updating the isMoving status to true
 	        	myStatus.isMoving=True
         		pub_myStatus.publish(myStatus)
 
-   			####################################
-   			#######Uncomment for velocity#######
-   			####################################
-   			wantData=True #Until the next cycle determined by rate.sleep this VICON data will be recieved continously.
-   			####################################
-   			####################################
 
-        	#After timeForMotion all bots will stop because of the case below. Subsequently they will re-enter into Voronoi partition computation.
-                elif (rospy.get_time()-timeStartMotion)>timeForMotion and (rospy.get_time()-timeStartMotion)<(timeForMotion+0.5):
-                        #This half a second period is to ensure that all bots have indeed stopped moving.
-                        #Setting the motion for this period.
-                        pwmInput.rightInput=0
-                        pwmInput.leftInput=0
-                        pub_PWM.publish(pwmInput)
+        	#After timeForMotion all bots will stop because of the case below. Subsequently they will re-enter into Voronoi partition computation. 
+   		elif (rospy.get_time()-timeStartMotion)>timeForMotion and (rospy.get_time()-timeStartMotion)<(timeForMotion+0.5):
+   			#This half a second period is to ensure that all bots have indeed stopped moving.
+			#Setting the motion for this period.
+   			pwmInput.rightInput=0
+        		pwmInput.leftInput=0
+        		pub_PWM.publish(pwmInput)
 
-                        #Updating the isMoving status to true
-                        myStatus.isMoving=True
-                        pub_myStatus.publish(myStatus)
-                elif (rospy.get_time()-timeStartMotion)>(timeForMotion+0.5):
-                        #Updating the isMoving status to false
+       		 	#Updating the isMoving status to true
+        		myStatus.isMoving=True
+        		pub_myStatus.publish(myStatus)
+		elif (rospy.get_time()-timeStartMotion)>(timeForMotion+0.5):
+			#Updating the isMoving status to false
                         myStatus.isMoving=False
                         pub_myStatus.publish(myStatus)
-        		####################################
-			#######Uncomment for velocity#######
-			####################################
-        		wantData=False
-        		####################################
-			####################################
 
        		#Setting the can
 
@@ -535,3 +409,4 @@ if __name__ == '__main__':
         torqueController()
     except rospy.ROSInterruptException:
         pass
+
