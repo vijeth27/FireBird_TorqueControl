@@ -26,7 +26,7 @@ def callback(pwmInput):
         	ser.write('2')
     	else:
         	ser.write('5') #Should never occur
-	lowPWM_R=115
+	lowPWM_R=120
     	#To ensure the signal sent is never larger than a byte. Probably happens automatically but safegaurd.
     	if (rightPWM>255) or (rightPWM<-255):
         	rightPWM=255
