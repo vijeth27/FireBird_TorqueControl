@@ -1,8 +1,8 @@
 import numpy as np
 import math
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from scipy.stats import multivariate_normal
-#from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d import Axes3D
 
 
 #Computing weighted Voronoi partitions
@@ -11,10 +11,10 @@ from scipy.stats import multivariate_normal
 #The origin of the the grid is set at the orgin of Vicon system. We take a grid
 #of 5m by 5m as a few VICON cameras are broken and coverage is restricted.
 
-origin = np.array([0,0])
+origin = np.array([0.0,0.0])
 
 grid_Size = 5.0 #in meters
-grid_Res = 0.02 #in cm
+grid_Res = 0.02 #in meters
 
 N_Grid_Points = int(grid_Size/grid_Res) #We gonna assume square grids. Else even the Voronoi partition function has to change.
 
@@ -23,18 +23,11 @@ y_grid=np.arange(-grid_Size/2+origin[1], grid_Size/2+origin[1], grid_Res)+grid_R
 
 X_grid, Y_grid = np.meshgrid(x_grid,y_grid)
 
-#pos_grid is a three 250x250 matrix with each point holding the coordinate of the centroid of a given grid aquare. 
-#eg. pos_grid[0,0,:] will give the 1st squares centroid as [-2.49,2.49]
+#pos_grid is a three 250x250 matrix with each point holding the coordinate of the centroid of a given grid square. 
+#eg. pos_grid[0,0,:] will give the 1st squares centroid as [-2.49,-2.49]
 pos_grid = np.empty(X_grid.shape + (2,))
 pos_grid[:, :, 0] = X_grid; pos_grid[:, :, 1] = Y_grid
 
-
-#The square will be defined by the bottom-left corner co-ordinate. The first square(0,0) will
-#have its corner at (0.0,0.0) and the centroid at (0.01,0.01).
-
-def centroid(i,j,side):
-	center=np.array([(i+0.5)*side,(j+0.5)*side]);
-	return center
 
 #Creating the phenonmenon (through definition of the basis functions) to be sensed in the environment.
 mu0 = np.array([5*0.25, 5*0.25]) 	#The basis is formed by taking two gaussians on each diagnol and a constant function. 
@@ -57,17 +50,10 @@ phi=a[0]*K[:,:,0]+a[1]*K[:,:,1]+a[2]*K[:,:,2]+a[3]*K[:,:,3]+a[4]*K[:,:,4]
 
 #print phi
 
-#Plotting the basis functions for visualisations.
-#fig = plt.figure()
-#ax=fig.add_subplot(111, projection='3d')
-#ax.plot_surface(X_grid, Y_grid, phi,cmap='viridis',linewidth=0)
-#plt.show()
-
-
 #The number of bots and their locations here will be fed to the system from the master computer later. 
 
 N_bots=4
-BotNumber=0  #This will be set correctly (0,1,2...N_bots) so that the bot know which location data is its own. 
+BotNumber=3  #This will be set correctly (0,1,2...N_bots) so that the bot know which location data is its own. 
 
 bot_loc=np.empty((2,N_bots));
 
@@ -77,16 +63,14 @@ bot_loc[:,1]=(-5*0.25,5*0.25);
 bot_loc[:,2]=(5*0.25,-5*0.25);
 bot_loc[:,3]=(-5*0.25,-5*0.25);
 
-
-
 #Write the subrcriber here to take all the bot_loc data
 def cartesianDist(a,b):
 	return math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2)
-
 #print bot_loc
 
 #Writing the Voronoi partition calculator function.
 #This function returns the set of points on the pos_grid which lie within the bot's voronoi partition. 
+#Note: We will only store the indices (i,j) of the points on the mesh grid as these are easioer to work with instead of the point coordinates themselves. 
 def voronoi(grid, Nbots, BotNo, locations):
 	VPartition=[]
 	N_Grid_Points = len(grid[:,0,0])
@@ -97,11 +81,45 @@ def voronoi(grid, Nbots, BotNo, locations):
 				if N!=BotNo and inPartition:
 					inPartition = inPartition and cartesianDist(grid[i,j,:],locations[:,BotNo])<cartesianDist(grid[i,j,:],locations[:,N]) 		
 			if(inPartition):
-				VPartition.append(grid[i,j,:])
+				VPartition.append(np.array([i,j]))
 	return VPartition
+
 A=voronoi(pos_grid,N_bots,BotNumber,bot_loc)
 
-print len(A)
+def Lv(partition,grid,K,a_hat,grid_res):
+	phi_hat=a_hat[0]*K[:,:,0]+a_hat[1]*K[:,:,1]+a_hat[2]*K[:,:,2]+a_hat[3]*K[:,:,3]+a_hat[4]*K[:,:,4]
+	LV=np.array([0.0,0.0])
+	dq=grid_res*grid_res
+	for point in partition:
+		LV=LV+phi_hat[point[0],point[1]]*grid[point[0],point[1],:]*dq #integral(q*phi(q)*dq). dq is a constant equal to area of grid square.
+	return LV
+
+def Mv(partition,K,a_hat,grid_res):
+	phi_hat=a_hat[0]*K[:,:,0]+a_hat[1]*K[:,:,1]+a_hat[2]*K[:,:,2]+a_hat[3]*K[:,:,3]+a_hat[4]*K[:,:,4]
+	MV=0.0
+	dq=grid_res*grid_res
+	for point in partition:
+		MV=MV+phi_hat[point[0],point[1]]*dq
+	return MV
+
+LvA=Lv(A,pos_grid,K,a,grid_Res)
+MvA=Mv(A,K,a,grid_Res)
+CvA=LvA/MvA
+
+print "Lv:", LvA
+print "Mv:", MvA
+print "Cv:", CvA
+#Plotting the basis functions for visualisations.
+fig = plt.figure()
+ax=fig.add_subplot(111, projection='3d')
+ax.plot_surface(X_grid, Y_grid, phi,cmap='viridis',linewidth=0)
+ax.scatter(CvA[0],CvA[1],color = 'r', marker = 'x')
+ax.scatter(bot_loc[0,BotNumber],bot_loc[1,BotNumber],color = 'g', marker = 'x')
+plt.show()
+
+#print len(A)
+
+#print A
 #x,y = np.array(A).T
 
 
