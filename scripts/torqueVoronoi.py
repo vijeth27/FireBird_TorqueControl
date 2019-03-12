@@ -62,15 +62,15 @@ bot_loc=np.empty((2,N_bots));
 
 #Defining as global variable for loging
 q=np.array([[0.0],[0.0],[0.0]])
-qr=np.array([[0.0],[0.0],[0.0]])
-q_prev=q
+#qr=np.array([[0.0],[0.0],[0.0]])
+#q_prev=q
 
 #Defining the initial velocity in cotinuatuion of defining the initial state of the bot.
-vel = np.array([[0.0],[0.0]])
+#vel = np.array([[0.0],[0.0]])
 
 #Defining control as global variable for logging
-u = np.array([[0.0],[0.0]])
-tau = np.array([[0.0],[0.0]])
+#u = np.array([[0.0],[0.0]])
+#tau = np.array([[0.0],[0.0]])
 
 #Defining the bot properties the best we know
 m=1.72 #mass in kg
@@ -152,7 +152,6 @@ def callbackVICON(data, args):
 def cartesianDist(a,b):
 	return math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2)
 
-
 #Writing the Voronoi partition calculator function.
 #This function returns the set of points on the pos_grid which lie within the bot's voronoi partition. 
 #Note: We will only store the indices (i,j) of the points on the mesh grid as these are easioer to work with instead of the point coordinates themselves. 
@@ -206,9 +205,18 @@ def torqueController():
 #	global wL
 #	global wdotR
 #	global wdotL
+	global pos_grid
+	global K
+	global bot_loc
+	global q
+	global a
+	global a_hat
+	global BotNumber
+	global N_bots
+	global grid_Res
 	rospy.init_node('torqueController',anonymous=True)
 #   rospy.Subscriber('encoderData', encoderData, callback)
-	pub_PWM=rospy.Publisher('pwmCmd',PwmInput,queue_size=10)
+	#pub_PWM=rospy.Publisher('pwmCmd',PwmInput,queue_size=10)
 
 	#VICON data subscriber. Change the name to the required name here.
     rospy.Subscriber("/vicon/vijeth_0/vijeth_0", TransformStamped, callbackVICON,0)
@@ -218,70 +226,54 @@ def torqueController():
 
     #The torque controller outputs commands at only 10Hz.
 	#The encoder data is still at 25 Hz as determined by the publisher in the other file
-	#Defning the initial point for bot the reference trajectory and the bot.
-	qr0=np.array([[0.0],[0.0],[0.0]])
-	qr_prev=qr0
-	qr_array=qr0 #For storage maybe
-
-	#Initializing the term for the integrator
-	err_int=np.array([[0.0],[0.0],[0.0]])
-	#Initializing
-	#Time parameters and initialisation
-	dt=0.01
-	timeLoopEnd=rospy.get_time()
-	print "This is outside the loop"
+	#timeLoopEnd=rospy.get_time()
+	#print "This is outside the loop"
 
 	rate = rospy.Rate(10)
     while not rospy.is_shutdown():
-		dt=rospy.get_time()-timeLoopEnd
-		q_dot = (q-q_prev)/dt
+    	#Computing the Voronoi partition for this bot.
+    	partition=voronoi(pos_grid,N_bots,BotNumber,bot_loc)
+
+    	#Computing the mean and weighted mean over this bot's partition. 
+    	mv=Mv(partition,K,a_hat,grid_Res)						
+    	lv=Lv(partition,pos_grid,K,a_hat,grid_Res)
+
+    	#Computing the weighted centroid.
+    	Cv=Lv/Mv
+    	print "Centroid for bot 0", Cv
+    	print "Locations for bot 0", bot_loc[:,0]
+    	print "Locations for bot 1", bot_loc[:,1]
+    	print "Locations for bot 2", bot_loc[:,2]
+    	print "Locations for bot 3", bot_loc[:,3]
+
+		#dt=rospy.get_time()-timeLoopEnd
+		#q_dot = (q-q_prev)/dt
 
 		#Velocity of states
-		vel = np.array((S(q).transpose()*S(q)).I*S(q).transpose()*np.matrix(q_dot))
+		#vel = np.array((S(q).transpose()*S(q)).I*S(q).transpose()*np.matrix(q_dot))
 		#print "vel:", vel
 		#print "q_dot:", q_dot
-		#Generating the reference trajectory
-		ref = traj_req(rospy.get_time()-codeStartTime,dt,qr_prev)
-		qr=ref[:3]
-		vel_ref=ref[3]
-		w_ref=ref[4]
-		qr_prev=qr
 
 		#Error in states
-		e=np.array(rot2body(q)*np.matrix(qr-q))
-		err_int=e*dt+err_int
-		print "e_int", err_int
+		#e=np.array(rot2body(q)*np.matrix(qr-q))
+		#err_int=e*dt+err_int
+		#print "e_int", err_int
 		#Controller
-		u=np.array(vc_dot(e+ki*err_int,vel,vel_ref,w_ref)) + k4*(vc(e+ki*err_int,vel_ref,w_ref)-vel)
+		#u=np.array(vc_dot(e+ki*err_int,vel,vel_ref,w_ref)) + k4*(vc(e+ki*err_int,vel_ref,w_ref)-vel)
 
 		#Torque to be sent at each instant
-		tau=np.array(torque(q,q_dot,vel,u))
+		#tau=np.array(torque(q,q_dot,vel,u))
 
 		#Cponverting the torques to PWM inputs.
-        pwmInput.rightInput=K_tau_R*tau[0][0]+K_wdot*wdotR+K_w*wR
-        pwmInput.leftInput=K_tau_L*tau[1][0]+K_wdot*wdotR+K_w*wL
-	    pub_PWM.publish(pwmInput)
-		q_prev=q
-		timeLoopEnd=rospy.get_time()
+        #pwmInput.rightInput=K_tau_R*tau[0][0]+K_wdot*wdotR+K_w*wR
+        #pwmInput.leftInput=K_tau_L*tau[1][0]+K_wdot*wdotR+K_w*wL
+	    #pub_PWM.publish(pwmInput)
+		#q_prev=q
+		#timeLoopEnd=rospy.get_time()
 		rate.sleep()
-#Plotting the basis functions for visualisations.
-#fig = plt.figure()
-#ax=fig.add_subplot(111, projection='3d')
-#ax.plot_surface(X_grid, Y_grid, phi,cmap='viridis',linewidth=0)
-#ax.scatter(CvA[0],CvA[1],color = 'r', marker = 'x')
-#ax.scatter(bot_loc[0,BotNumber],bot_loc[1,BotNumber],color = 'g', marker = 'x')
-#plt.show()
 
-#print len(A)
-
-#print A
-#x,y = np.array(A).T
-
-
-#fig = plt.figure()
-#ax = fig.add_subplot(111)
-#fig.show()
-
-#ax.scatter(x,y)
-#ax.scatter(bot_loc[0][:],bot_loc[1][:], color = 'r', marker = 'x')
-
+if __name__ == '__main__':
+    try:
+        torqueController()
+    except rospy.ROSInterruptException:
+        pass
