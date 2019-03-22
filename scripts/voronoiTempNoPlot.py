@@ -53,15 +53,16 @@ phi=a[0]*K[:,:,0]+a[1]*K[:,:,1]+a[2]*K[:,:,2]+a[3]*K[:,:,3]+a[4]*K[:,:,4]
 #The number of bots and their locations here will be fed to the system from the master computer later. 
 
 N_bots=4
-BotNumber=3  #This will be set correctly (0,1,2...N_bots) so that the bot know which location data is its own. 
+BotNumber=1  #This will be set correctly (0,1,2...N_bots) so that the bot know which location data is its own. 
 
 bot_loc=np.empty((2,N_bots));
 
 #Temporary shiz
-bot_loc[:,0]=(5*0.0,5*0.0);
-bot_loc[:,1]=(-5*0.25,5*0.25);
-bot_loc[:,2]=(5*0.25,-5*0.25);
-bot_loc[:,3]=(-5*0.25,-5*0.25);
+#Centroid for bot 1 [-1.25631214 -1.16144022]
+bot_loc[:,0]=(0.01205115,0.58587184);
+bot_loc[:,1]=(-0.97604106,-0.38491255);
+bot_loc[:,2]=(1.00243719,-0.36611598);
+bot_loc[:,3]=(-1.08274061,0.99947943);
 
 #Write the subrcriber here to take all the bot_loc data
 def cartesianDist(a,b):
@@ -110,12 +111,12 @@ print "Lv:", LvA
 print "Mv:", MvA
 print "Cv:", CvA
 #Plotting the basis functions for visualisations.
-fig = plt.figure()
-ax=fig.add_subplot(111, projection='3d')
-ax.plot_surface(X_grid, Y_grid, phi,cmap='viridis',linewidth=0)
-ax.scatter(CvA[0],CvA[1],color = 'r', marker = 'x')
-ax.scatter(bot_loc[0,BotNumber],bot_loc[1,BotNumber],color = 'g', marker = 'x')
-plt.show()
+#fig = plt.figure()
+#ax=fig.add_subplot(111, projection='3d')
+#ax.plot_surface(X_grid, Y_grid, phi,cmap='viridis',linewidth=0)
+#ax.scatter(CvA[0],CvA[1],color = 'r', marker = 'x')
+#ax.scatter(bot_loc[0,BotNumber],bot_loc[1,BotNumber],color = 'g', marker = 'x')
+#plt.show()
 
 #print len(A)
 
